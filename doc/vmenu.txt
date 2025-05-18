@@ -1,0 +1,129 @@
+*vmenu.txt*
+
+Author:		leo-fp
+Version:	0.2.0
+
+1. Introduction...................................................|vmenu-intro|
+2. Installation............................................|vmenu-installation|
+3. Functions..................................................|vmenu-Functions|
+    3.1 vmenu#openContextWindow()...................|vmenu#openContextWindow()|
+    3.2 vmenu#installTopMenu().........................|vmenu#installTopMenu()|
+    3.3 vmenu#openTopMenu()...............................|vmenu#openTopMenu()|
+    3.4 vmenu#itemTips().....................................|vmenu#itemTips()|
+    3.5 vmenu#parse_context()...........................|vmenu#parse_context()|
+4. vmenu item field	.........................................|vmenu-item-field|
+    4.1 show-ft.................................................|vmenu-show-ft|
+    4.2 show-mode...................................................|show-mode|
+    4.3 deactive-mode...........................................|deactive-mode|
+    4.4 show-if.......................................................|show-if|
+    4.5 deactive-if...............................................|deactive-if|
+5. vmenu Changelog............................................|vmenu-changelog|
+
+==============================================================================
+1. Introduction                                                    *vmenu-intro*
+
+another menu plugin. made as replacement of menu and context menu of
+vim-quickui in personal use case.
+
+==============================================================================
+2. Installation 						                    *vmenu-installation*
+
+Packer.nvim >
+    use { "leo-fp/vmenu",
+        requires = "skywind3000/vim-quickui"
+    }
+
+==============================================================================
+3. Functions                                                   *vmenu-Functions*
+
+3.1 vmenu#openContextWindow(content, opts) 			 *vmenu#openContextWindow()*
+------------
+Open context window.
+
+content: parsed context item list. can be create by 'vmenu#parse_context'
+opts: keep as a parameter compatible with vim-quickui. It is not in using
+currently.
+
+3.2 vmenu#installTopMenu(name, userTopMenu)				*vmenu#installTopMenu()*
+-------------------------
+install top menu
+
+3.3 vmenu#openTopMenu()				        	           *vmenu#openTopMenu()*
+------------------
+open installed top menu
+
+3.4 vmenu#itemTips()                                          *vmenu#itemTips()*
+----------------------------------------
+Return current focused item tips.
+
+It is useful if you want show item tips in statusline.
+
+3.5 vmenu#parse_context(userItemList, itemVersion)       *vmenu#parse_context()*
+----------------------------------------
+Parse quickui item or vmenu item to inner format.
+
+userItemList: quickui item list or vmenu item list.
+itemVersion: g:VMENU#ITEM_VERSION.QUICKUI or g:VMENU#ITEM_VERSION.QUICKUI
+return: inner item list that can be used in vmenu
+
+==============================================================================
+4. vmenu item field						                      *vmenu-item-field*
+
+4.1 show-ft                                                      *vmenu-show-ft*
+----------------------------------------
+If you want vmenu item only appears in specific file types.
+>
+    #{name: 'item name', cmd: '', show-ft: ["NvimTree"]}
+
+File type can be get by >
+    :echo &ft
+
+4.2 show-mode                                                  *vmenu-show-mode*
+----------------------------------------
+If you want vmenu item only appears in specific mode.
+WARNING: There are some bugs in detecting visual mode, so it is not recomended
+to use currently.
+>
+    #{name: 'item name', cmd: '', show-mode: ["n"]}
+
+You can pass different context menu as altarnative approach.
+
+4.3 deactive-mode                                          *vmenu-deactive-mode*
+----------------------------------------
+If you want vmenu item be seeable but not executable in specific mode.
+WARNING: There are some bugs in detecting visual mode, so it is not recomended
+to use currently.
+>
+    #{name: 'item name', cmd: '', deactive-mode: ["n"]}
+
+You can pass different context menu as altarnative approach.
+
+4.4 show-if                                                      *vmenu-show-if*
+----------------------------------------
+You can define a function to control whether to show a item.
+The function receives a dict that contains some status of editor when you open
+a vmenu window and return 0 -> do not show, 1 -> show.
+
+To see structure of the dict, check s:GlobalStautus in code.
+
+
+4.5 deactive-if                                              *vmenu-deactive-if*
+----------------------------------------
+You can define a function to control whether to deactive a item.
+The function receives a dict that contains some status of editor when you open
+a vmenu window and return 0 -> do not deactive, 1 -> deactive.
+
+To see structure of the dict, check s:GlobalStautus in code.
+
+
+==============================================================================
+5. vmenu Tips and Tricks						                    *vmenu-tips*
+see README.md in root directory of the plugin.
+
+
+==============================================================================
+6. vmenu Changelog					                           *vmenu-changelog*
+
+see README.md in root directory of the plugin.
+
+# vim:ft=help

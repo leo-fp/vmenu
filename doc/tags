@@ -1,0 +1,17 @@
+vmenu#installTopMenu()	vmenu.txt	/*vmenu#installTopMenu()*
+vmenu#itemTips()	vmenu.txt	/*vmenu#itemTips()*
+vmenu#openContextWindow()	vmenu.txt	/*vmenu#openContextWindow()*
+vmenu#openTopMenu()	vmenu.txt	/*vmenu#openTopMenu()*
+vmenu#parse_context()	vmenu.txt	/*vmenu#parse_context()*
+vmenu-Functions	vmenu.txt	/*vmenu-Functions*
+vmenu-changelog	vmenu.txt	/*vmenu-changelog*
+vmenu-deactive-if	vmenu.txt	/*vmenu-deactive-if*
+vmenu-deactive-mode	vmenu.txt	/*vmenu-deactive-mode*
+vmenu-installation	vmenu.txt	/*vmenu-installation*
+vmenu-intro	vmenu.txt	/*vmenu-intro*
+vmenu-item-field	vmenu.txt	/*vmenu-item-field*
+vmenu-show-ft	vmenu.txt	/*vmenu-show-ft*
+vmenu-show-if	vmenu.txt	/*vmenu-show-if*
+vmenu-show-mode	vmenu.txt	/*vmenu-show-mode*
+vmenu-tips	vmenu.txt	/*vmenu-tips*
+vmenu.txt	vmenu.txt	/*vmenu.txt*
