@@ -17,6 +17,10 @@ Version:	0.2.0
     4.3 deactive-mode...........................................|deactive-mode|
     4.4 show-if.......................................................|show-if|
     4.5 deactive-if...............................................|deactive-if|
+    4.6 name.............................................................|name|
+    4.7 cmd..............................................................|name|
+    4.8 tip...............................................................|tip|
+    4.9 icon.............................................................|icon|
 5. vmenu Changelog............................................|vmenu-changelog|
 
 ==============================================================================
@@ -63,7 +67,8 @@ It is useful if you want show item tips in statusline.
 Parse quickui item or vmenu item to inner format.
 
 userItemList: quickui item list or vmenu item list.
-itemVersion: g:VMENU#ITEM_VERSION.QUICKUI or g:VMENU#ITEM_VERSION.QUICKUI
+itemVersion: g:VMENU#ITEM_VERSION.QUICKUI (default) or
+g:VMENU#ITEM_VERSION.QUICKUI
 return: inner item list that can be used in vmenu
 
 ==============================================================================
@@ -114,6 +119,43 @@ The function receives a dict that contains some status of editor when you open
 a vmenu window and return 0 -> do not deactive, 1 -> deactive.
 
 To see structure of the dict, check s:GlobalStautus in code.
+
+
+4.6 name                                                            *vmenu-name*
+----------------------------------------
+Context menu text.
+If you want to mark a char in name field as shortcut key. Do like this
+>
+   #{name: "&hello", cmd: "echo 1"}
+
+When you pressing 'h' in a context menu, the cmd 'echo 1' will be executed.
+If you define this field as '&Hello', the cmd will be executed by pressing
+'h'.
+It is applicable in top menu and context menu.
+
+
+4.7 cmd                                                              *vmenu-cmd*
+----------------------------------------
+The Ex command you want to execute.
+
+Examples:
+>
+   #{name: "&hello", cmd: "echo 1"}
+   #{name: "&hello", cmd: "Acommand"}
+   #{name: "&hello", cmd: 'call plugin-name#function-name("param")'}
+   #{name: "&hello", cmd: 'norm j'}
+
+
+4.8 tip                                                              *vmenu-tip*
+----------------------------------------
+A text that you want to show when you focusing a vmen item.
+It is usually used to describe item functionality.
+
+
+4.9 icon                                                            *vmenu-icon*
+----------------------------------------
+Item icon.
+Indentation is automatically processed by the plugin.
 
 
 ==============================================================================

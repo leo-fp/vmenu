@@ -50,8 +50,14 @@ call vmenu#openTopMenu()
 ## tips and tricks
 * if you want append some vmenu items to your vim-quickui context menu
 ```vimscript
-call vmenu#openContextWindow(vmenu#parse_context(vim-quickui-context) +
-vmenu#parse_context(vmenu-items, g:VMENU#ITEM_VERSION.VMENU), opts)
+" example
+let quickui_context = [
+            \ ["name", '']
+            \]
+let content = vmenu#parse_context(quickui_context) + vmenu#parse_context([
+            \#{name: 'name', cmd: ''},
+            \], g:VMENU#ITEM_VERSION.VMENU)
+call vmenu#openContextWindow(content, {})
 
 ```
 * if you want define a vmenu item that behaves like pressing a key
