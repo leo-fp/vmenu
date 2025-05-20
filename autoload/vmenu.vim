@@ -31,6 +31,7 @@ let g:VMENU#ITEM_VERSION = #{QUICKUI: 1, VMENU: 2}
 " config
 "-------------------------------------------------------------------------------
 let s:enable_log = get(g:, "vmenu_enable_log", 0)
+let s:enable_echo_tips = get(g:, "vmenu_enable_echo_tips", 1)
 
 "-------------------------------------------------------------------------------
 " class HotKey
@@ -310,6 +311,7 @@ function! s:ContextWindow.focusItemByIndex(index)
     let self.__curItem = self.contextItemList[a:index]
     call self.__renderHighlight(a:index)
     call self.__triggerStatuslineRefresh()
+    call self.__echoTipsIfEnabled()
     redraw
 endfunction
 function! s:ContextWindow.__triggerStatuslineRefresh()
@@ -321,6 +323,11 @@ lua << EOF
 EOF
     else
         let &stl=&stl
+    endif
+endfunction
+function! s:ContextWindow.__echoTipsIfEnabled()
+    if s:enable_echo_tips == 1
+        echo vmenu#itemTips()
     endif
 endfunction
 function! s:ContextWindow.getFocusedItemTips()
@@ -1462,3 +1469,11 @@ if 0
 
     call s:showErrors()
 endif
+
+"call s:ContextWindow.builder()
+        "\.contextItemList(s:VMenuManager.parseContextItem([
+        "\#{name: '0123456789', cmd: 'echom 1', tip: 'tip', icon: '', subItemList: [#{name: 'sub name', cmd: 'echom 1.1', tip: 'tip2', icon: ''}]},
+        "\], g:VMENU#ITEM_VERSION.VMENU))
+        "\.build()
+        "\.showAtCursor()
+"call s:VMenuManager.startGettingUserInput()
