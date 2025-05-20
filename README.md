@@ -19,7 +19,8 @@ just have some ideas want to try, start over seems easier and tempting
 ## NOTE
 * This plugin may changes radically, use with caution
 
-## install
+## Install
+packer.nvim
 ```vimscript
     use { "leo-fp/vmenu",
         requires = "skywind3000/vim-quickui"

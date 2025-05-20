@@ -307,8 +307,8 @@ function! s:ContextWindow.showAtCursor()
 endfunction
 function! s:ContextWindow.focusItemByIndex(index)
     let self.__curItemIndex = a:index
-    let self.__curItem = self.contextItemList[self.__curItemIndex]
-    call self.__renderHighlight(self.__curItemIndex)
+    let self.__curItem = self.contextItemList[a:index]
+    call self.__renderHighlight(a:index)
     call self.__triggerStatuslineRefresh()
     redraw
 endfunction
@@ -415,6 +415,7 @@ function! s:ContextWindow.__renderHighlight(offset)
         endif
     endfor
 
+    " [hilight, start column number, start line number, end column number, end line number]
     let focusedLineSyntaxList = []
     let item = self.contextItemList[a:offset]
     if self.contextItemList[a:offset].hotKeyPos == -1
@@ -1212,7 +1213,7 @@ if 0
         call s:VMenuManager.__focusedWindow.handleKeyStroke(char2nr(''))
     endif
 
-    " inactive line should not be selected
+    " inactive item should not be selected
     if 1
         call s:ContextWindow.builder()
                     \.contextItemList(s:VMenuManager.parseContextItem([
@@ -1259,7 +1260,7 @@ if 0
         call s:VMenuManager.__focusedWindow.handleKeyStroke(char2nr(''))
     endif
 
-    " context menu hotkey pos test
+    " context menu hotkey position test
     if 1
         call s:ContextWindow.builder()
                     \.contextItemList(s:VMenuManager.parseContextItem([
