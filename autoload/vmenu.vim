@@ -61,23 +61,18 @@ hi! VmenuSelectedHotkey gui=underline guibg=#2E436E guifg=#BEC0C6
 let s:VmenuWindowBuilder = {}
 function! s:VmenuWindowBuilder.new()
     let vmenuWindowBuilder = deepcopy(s:VmenuWindowBuilder, 1)
-    let vmenuWindowBuilder.__delayTime = 0
-    let vmenuWindowBuilder.__parentContextWindow = {}
-    let vmenuWindowBuilder.__goPreviousKey = 'k'
-    let vmenuWindowBuilder.__goNextKey = 'j'
-    let vmenuWindowBuilder.__closeKey = ''    "<ESC>
-    let vmenuWindowBuilder.__confirmKey = ''    " <CR>
-    let vmenuWindowBuilder.__goBottomKey = 'G'
-    let vmenuWindowBuilder.__x = 0
-    let vmenuWindowBuilder.__y = 0
-    let vmenuWindowBuilder.__traceId = ''
+    let vmenuWindowBuilder.__delayTime           = 0    " delay time before handling key stroke
+    let vmenuWindowBuilder.__parentContextWindow = {}   " parent vmenu window
+    let vmenuWindowBuilder.__goPreviousKey       = 'k'  " key to focus previous item
+    let vmenuWindowBuilder.__goNextKey           = 'j'  " key to focus next item
+    let vmenuWindowBuilder.__closeKey            = '' " <ESC>. key to close vmenu window
+    let vmenuWindowBuilder.__confirmKey          = '' " <CR>. key to enter item
+    let vmenuWindowBuilder.__goBottomKey         = 'G'  " key to go bottom
+    let vmenuWindowBuilder.__x                   = 0    " column number
+    let vmenuWindowBuilder.__y                   = 0    " line number
+    let vmenuWindowBuilder.__traceId             = ''   " a text that will be printed in log. for debug
     let vmenuWindowBuilder.__errConsumer = function("s:printErr")
     return vmenuWindowBuilder
-endfunction
-function! s:VmenuWindowBuilder.position(position)
-    let self.__x = a:position[0]
-    let self.__y = a:position[1]
-    return self
 endfunction
 function! s:VmenuWindowBuilder.delay(seconds)
     let self.__delayTime = a:seconds
@@ -280,6 +275,8 @@ function! s:ContextWindow.__fileterVisibleItems(itemList, globalStatus)
     return activeItems
 endfunction
 
+" x: column number
+" y: line number
 function! s:ContextWindow.showAt(x, y)
     let opts = {}
     let text = self.__render()

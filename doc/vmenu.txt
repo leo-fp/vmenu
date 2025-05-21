@@ -12,7 +12,7 @@ Version:	0.2.0
     3.4 vmenu#itemTips().....................................|vmenu#itemTips()|
     3.5 vmenu#parse_context()...........................|vmenu#parse_context()|
 4. vmenu item field	.........................................|vmenu-item-field|
-    4.1 show-ft.................................................|vmenu-show-ft|
+    4.1 show-ft.......................................................|show-ft|
     4.2 show-mode...................................................|show-mode|
     4.3 deactive-mode...........................................|deactive-mode|
     4.4 show-if.......................................................|show-if|
@@ -21,6 +21,7 @@ Version:	0.2.0
     4.7 cmd..............................................................|name|
     4.8 tip...............................................................|tip|
     4.9 icon.............................................................|icon|
+    4.10 subItemList..............................................|subItemList|
 5. vmenu Changelog............................................|vmenu-changelog|
 
 ==============================================================================
@@ -74,7 +75,7 @@ return: inner item list that can be used in vmenu
 ==============================================================================
 4. vmenu item field						                      *vmenu-item-field*
 
-4.1 show-ft                                                      *vmenu-show-ft*
+4.1 show-ft                                                            *show-ft*
 ----------------------------------------
 If you want vmenu item only appears in specific file types.
 >
@@ -157,6 +158,16 @@ It is usually used to describe item functionality.
 Item icon.
 Indentation is automatically processed by the plugin.
 
+
+4.10 subItemList                                             *vmenu-subItemList*
+----------------------------------------
+A vmenu item list.
+If defined, the list will be opened as second menu when executing a vmenu
+item.
+
+Example:
+>
+    #{name: 'name', cmd: 'echo 1', subItemList: [#{name: 'sub name', cmd: 'echo 1.1'}]},
 
 ==============================================================================
 5. vmenu Tips and Tricks						                    *vmenu-tips*
