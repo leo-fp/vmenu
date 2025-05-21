@@ -328,7 +328,7 @@ function! s:ContextWindow.getFocusedItemTips()
 endfunction
 function! s:ContextWindow.focusNext()
     let idx = self.__curItemIndex + 1
-    while idx < self.contextItemList->len() && !self.isExecutable(idx)
+    while idx < self.contextItemList->len() && !self.canBeFocused(idx)
         let idx += 1
     endwhile
     if idx < self.contextItemList->len()
@@ -339,7 +339,7 @@ function! s:ContextWindow.focusNext()
 endfunction
 function! s:ContextWindow.focusPrev()
     let idx = self.__curItemIndex - 1
-    while idx >= 0 && !self.isExecutable(idx)
+    while idx >= 0 && !self.canBeFocused(idx)
         let idx -= 1
     endwhile
     if idx >= 0
@@ -351,12 +351,12 @@ endfunction
 function! s:ContextWindow.focusBottom()
     call self.focusItemByIndex(len(self.contextItemList)-1)
 endfunction
-function! s:ContextWindow.isExecutable(idx)
+function! s:ContextWindow.canBeFocused(idx)
     return self.contextItemList[a:idx].isSep == 0 && self.contextItemList[a:idx].isInactive(s:VMenuManager.getGlobalStautus()) == 0
 endfunction
 
 function! s:ContextWindow.enter()
-    if !self.isExecutable(self.__curItemIndex)
+    if !self.canBeFocused(self.__curItemIndex)
         call self.__errConsumer("vmenu: current item is not executable!")
         return
     endif
