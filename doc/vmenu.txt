@@ -22,7 +22,11 @@ Version:	0.2.0
     4.8 tip...............................................................|tip|
     4.9 icon.............................................................|icon|
     4.10 subItemList..............................................|subItemList|
-5. vmenu Changelog............................................|vmenu-changelog|
+5. vmenu Tips and Tricks...........................................|vmenu-tips|
+6. global variables....................................|vmenu-global-variables|
+    6.1 g:vmenu_enable_log.............................|vmenu-vmenu_enable_log|
+    6.2 g:vmenu_enable_echo_tips.......................|vmenu_enable_echo_tips|
+7. vmenu Changelog............................................|vmenu-changelog|
 
 ==============================================================================
 1. Introduction                                                    *vmenu-intro*
@@ -175,7 +179,29 @@ see README.md in root directory of the plugin.
 
 
 ==============================================================================
-6. vmenu Changelog					                           *vmenu-changelog*
+6. global variables						                *vmenu-global-variables*
+6.1 vmenu_enable_log                                    *vmenu-vmenu_enable_log*
+----------------------------------------
+Print log message to message-history or not. Disabled by default.
+If you want to enable it.
+>
+    :let g:vmenu_enable_log = 1
+
+Check message-history:
+>
+    :messages
+
+
+6.2 vmenu_enable_echo_tips                              *vmenu_enable_echo_tips*
+----------------------------------------
+Print item tips to command line or not. Enable by default.
+If you want to enable it.
+>
+    :let g:vmenu_enable_echo_tips = 0
+
+
+==============================================================================
+7. vmenu Changelog					                           *vmenu-changelog*
 
 see README.md in root directory of the plugin.
 

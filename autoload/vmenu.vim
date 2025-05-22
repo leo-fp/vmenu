@@ -157,6 +157,8 @@ function! s:VmenuWindow.close(closedByExec=s:CLOSED_BY_ESC)
     " root window, stop getting user input
     if !has_key(self, 'parentVmenuWindow') || empty(self.parentVmenuWindow)
         call s:VMenuManager.stopListen()
+        " make sure no vmenu item tips left
+        echo vmenu#itemTips()
     endif
 endfunction
 
@@ -1466,11 +1468,3 @@ if 0
 
     call s:showErrors()
 endif
-
-"call s:ContextWindow.builder()
-        "\.contextItemList(s:VMenuManager.parseContextItem([
-        "\#{name: '0123456789', cmd: 'echom 1', tip: 'tip', icon: '', subItemList: [#{name: 'sub name', cmd: 'echom 1.1', tip: 'tip2', icon: ''}]},
-        "\], g:VMENU#ITEM_VERSION.VMENU))
-        "\.build()
-        "\.showAtCursor()
-"call s:VMenuManager.startGettingUserInput()
