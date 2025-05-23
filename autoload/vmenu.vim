@@ -72,7 +72,7 @@ function! s:VmenuWindowBuilder.new()
     let vmenuWindowBuilder.__x                   = 0    " column number
     let vmenuWindowBuilder.__y                   = 0    " line number
     let vmenuWindowBuilder.__traceId             = ''   " a text that will be printed in log. for debug
-    let vmenuWindowBuilder.__errConsumer = function("s:printErr")
+    let vmenuWindowBuilder.__errConsumer = function("s:printWarn")
     return vmenuWindowBuilder
 endfunction
 function! s:VmenuWindowBuilder.delay(seconds)
@@ -125,8 +125,8 @@ function! s:VmenuWindow.new()
     let vmenuWindow.__delayTime = 0
     let vmenuWindow.__goBottomKey = ''
     let vmenuWindow.__traceId = ''
-    let vmenuWindow.__keyMap = {}
-    let vmenuWindow.__errConsumer = function("s:printErr")
+    let vmenuWindow.__actionMap = {}
+    let vmenuWindow.__errConsumer = function("s:printWarn")
     return vmenuWindow
 endfunction
 function! s:VmenuWindow.focusNext()
@@ -177,8 +177,8 @@ function! s:VmenuWindow.handleKeyStroke(code, doAfterKeyStroke={ contextWindow -
         execute self.__delayTime .. 'sleep'
     endif
 
-    if has_key(self.__keyMap, nr2char(a:code))
-        call self.__keyMap[nr2char(a:code)]()
+    if has_key(self.__actionMap, nr2char(a:code))
+        call self.__actionMap[nr2char(a:code)]()
         return
     else
         " do nothing
@@ -252,17 +252,17 @@ function! s:ContextWindow.new(contextWindowBuilder)
     let contextWindow.__logger = s:Log.new(contextWindow)
     call contextWindow.__logger.info(printf("new ContextWindow created, winId: %s", contextWindow.winId))
 
-    let keyMap = {}
-    let keyMap[a:contextWindowBuilder.__closeKey]      = function(contextWindow.close,       [], contextWindow)
-    let keyMap[a:contextWindowBuilder.__goNextKey]     = function(contextWindow.focusNext,   [], contextWindow)
-    let keyMap[a:contextWindowBuilder.__goPreviousKey] = function(contextWindow.focusPrev,   [], contextWindow)
-    let keyMap[a:contextWindowBuilder.__goBottomKey]   = function(contextWindow.focusBottom, [], contextWindow)
-    let keyMap[a:contextWindowBuilder.__confirmKey]    = function(contextWindow.enter,     [], contextWindow)
+    let actionMap = {}
+    let actionMap[a:contextWindowBuilder.__closeKey]      = function(contextWindow.close,       [], contextWindow)
+    let actionMap[a:contextWindowBuilder.__goNextKey]     = function(contextWindow.focusNext,   [], contextWindow)
+    let actionMap[a:contextWindowBuilder.__goPreviousKey] = function(contextWindow.focusPrev,   [], contextWindow)
+    let actionMap[a:contextWindowBuilder.__goBottomKey]   = function(contextWindow.focusBottom, [], contextWindow)
+    let actionMap[a:contextWindowBuilder.__confirmKey]    = function(contextWindow.enter,     [], contextWindow)
     for hotKey in contextWindow.hotKeyList
-        let keyMap[hotKey['keyChar']] = function(contextWindow.executeByHotKey, [hotKey.code], contextWindow)
+        let actionMap[hotKey['keyChar']] = function(contextWindow.executeByHotKey, [hotKey.code], contextWindow)
     endfor
 
-    let contextWindow.__keyMap = keyMap
+    let contextWindow.__actionMap = actionMap
     return contextWindow
 endfunction
 " globalStatus: class GlobalStautus
@@ -452,13 +452,13 @@ function! s:ContextItem.new(dict)
     let contextItem.tip             = get(a:dict, 'tip', '')
     let contextItem.name            = get(a:dict, 'name', '')
     let contextItem.hotKey          = get(a:dict, 'hotKey', '')
-    let contextItem.hotKeyPos       = get(a:dict, 'hotKeyPos', -1)
-    let contextItem.isVisible  = get(a:dict, 'isVisible')   " GlobalStautus class -> 0/1
-    let contextItem.isInactive = get(a:dict, 'isInactive')   " GlobalStautus class -> 0/1
-    let contextItem.subItemList     = get(a:dict, 'subItemList', [])    " ContextItem[]
-    let contextItem.isSep           = get(a:dict, 'isSep', 0)
-    let contextItem.descPos         = get(a:dict, 'descPos', -1)
-    let contextItem.descWidth       = get(a:dict, 'descWidth', 0)
+    let contextItem.hotKeyPos       = get(a:dict, 'hotKeyPos', -1)   " hotkey position
+    let contextItem.isVisible  = get(a:dict, 'isVisible')            " GlobalStautus class -> 0/1
+    let contextItem.isInactive = get(a:dict, 'isInactive')           " GlobalStautus class -> 0/1
+    let contextItem.subItemList     = get(a:dict, 'subItemList', []) " ContextItem list
+    let contextItem.isSep           = get(a:dict, 'isSep', 0)        " is seperator line. 0: false, 1: true
+    let contextItem.descPos         = get(a:dict, 'descPos', -1)     " offset of shortKey
+    let contextItem.descWidth       = get(a:dict, 'descWidth', 0)    " length of shortKey
     let contextItem.focusedLineSyntaxList       = []
     return contextItem
 endfunction
@@ -530,17 +530,17 @@ function! s:TopMenuWindow.new(topMenuWindowBuilder)
     let topMenuWindow.__logger = s:Log.new(topMenuWindow)
     call topMenuWindow.__logger.info(printf("new TopMenuWindow created, winId: %s", topMenuWindow.winId))
 
-    let keyMap = {}
-    let keyMap[a:topMenuWindowBuilder.__closeKey]      = function(topMenuWindow.close,       [], topMenuWindow)
-    let keyMap[a:topMenuWindowBuilder.__goNextKey]     = function(topMenuWindow.focusNext,   [], topMenuWindow)
-    let keyMap[a:topMenuWindowBuilder.__goPreviousKey] = function(topMenuWindow.focusPrev,   [], topMenuWindow)
-    let keyMap[a:topMenuWindowBuilder.__goBottomKey]   = function(topMenuWindow.focusBottom, [], topMenuWindow)
-    let keyMap[a:topMenuWindowBuilder.__confirmKey]    = function(topMenuWindow.enter,     [], topMenuWindow)
+    let actionMap = {}
+    let actionMap[a:topMenuWindowBuilder.__closeKey]      = function(topMenuWindow.close,       [], topMenuWindow)
+    let actionMap[a:topMenuWindowBuilder.__goNextKey]     = function(topMenuWindow.focusNext,   [], topMenuWindow)
+    let actionMap[a:topMenuWindowBuilder.__goPreviousKey] = function(topMenuWindow.focusPrev,   [], topMenuWindow)
+    let actionMap[a:topMenuWindowBuilder.__goBottomKey]   = function(topMenuWindow.focusBottom, [], topMenuWindow)
+    let actionMap[a:topMenuWindowBuilder.__confirmKey]    = function(topMenuWindow.enter,     [], topMenuWindow)
     for hotKey in topMenuWindow.hotKeyList
-        let keyMap[hotKey['keyChar']] = function(topMenuWindow.executeByHotKey, [hotKey.code], topMenuWindow)
+        let actionMap[hotKey['keyChar']] = function(topMenuWindow.executeByHotKey, [hotKey.code], topMenuWindow)
     endfor
 
-    let topMenuWindow.__keyMap = keyMap
+    let topMenuWindow.__actionMap = actionMap
     return topMenuWindow
 endfunction
 function! s:TopMenuWindow.show()
@@ -980,7 +980,7 @@ endfunction
 "-------------------------------------------------------------------------------
 " utils
 "-------------------------------------------------------------------------------
-function! s:printErr(msg)
+function! s:printWarn(msg)
     echohl WarningMsg | echo a:msg | echohl None
 endfunction
 
