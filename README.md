@@ -27,6 +27,11 @@ packer.nvim
     }
 
 ```
+vim-plug
+```vimscript
+    Plug 'skywind3000/vim-quickui'
+    Plug 'leo-fp/vmenu'
+```
 
 ## comming from vim-quickui
 context menu:
