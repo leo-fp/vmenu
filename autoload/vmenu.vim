@@ -41,7 +41,7 @@ function! s:HotKey.new(keyChar, offset)
     let hotKey = deepcopy(s:HotKey, 1)
     let hotKey.keyChar = a:keyChar
     let hotKey.code = char2nr(a:keyChar)
-    let hotKey.offset = a:offset
+    let hotKey.offset = a:offset    " the index in context item list
     return hotKey
 endfunction
 
@@ -137,15 +137,26 @@ function! s:VmenuWindow.focusItemByIndex(index)
 endfunction
 function! s:VmenuWindow.focusBottom()
 endfunction
+function! s:VmenuWindow.canBeFocused(idx)
+    " can be focus by default
+    return 1
+endfunction
 " enter focused item. open sub menu or execute cmd
 function! s:VmenuWindow.enter()
 endfunction
-function! s:VmenuWindow.executeByHotKey(code)
-    let hotKeyIdx = indexof(self.hotKeyList, {i, v -> v.code == a:code})
-    if hotKeyIdx != -1
-        call self.focusItemByIndex(self.hotKeyList[hotKeyIdx].offset)
-        call self.enter()
+function! s:VmenuWindow.executeByHotKey(char)
+    let idx = indexof(self.hotKeyList, {i, v -> v.keyChar == a:char})
+    if idx == -1
+        return
     endif
+
+    if self.canBeFocused(self.hotKeyList[idx].offset) == 0
+        call self.__errConsumer("vmenu: no executable item for hotkey '" .. a:char .. "'")
+        return
+    endif
+
+    call self.focusItemByIndex(self.hotKeyList[idx].offset)
+    call self.enter()
 endfunction
 function! s:VmenuWindow.close(closedByExec=s:CLOSED_BY_ESC)
     call self.quickuiWindow.close()
@@ -259,7 +270,7 @@ function! s:ContextWindow.new(contextWindowBuilder)
     let actionMap[a:contextWindowBuilder.__goBottomKey]   = function(contextWindow.focusBottom, [], contextWindow)
     let actionMap[a:contextWindowBuilder.__confirmKey]    = function(contextWindow.enter,     [], contextWindow)
     for hotKey in contextWindow.hotKeyList
-        let actionMap[hotKey['keyChar']] = function(contextWindow.executeByHotKey, [hotKey.code], contextWindow)
+        let actionMap[hotKey['keyChar']] = function(contextWindow.executeByHotKey, [hotKey.keyChar], contextWindow)
     endfor
 
     let contextWindow.__actionMap = actionMap
@@ -396,6 +407,7 @@ endfunction
 function! s:ContextWindow.__render()
     return reduce(self.contextItemList, { acc, val -> add(acc, val.name) }, [])
 endfunction
+" TODO: if an item is inactive, the hotkey also needs to be rendered
 function! s:ContextWindow.__renderHighlight(offset)
     let win = self.quickuiWindow
 
@@ -537,7 +549,7 @@ function! s:TopMenuWindow.new(topMenuWindowBuilder)
     let actionMap[a:topMenuWindowBuilder.__goBottomKey]   = function(topMenuWindow.focusBottom, [], topMenuWindow)
     let actionMap[a:topMenuWindowBuilder.__confirmKey]    = function(topMenuWindow.enter,     [], topMenuWindow)
     for hotKey in topMenuWindow.hotKeyList
-        let actionMap[hotKey['keyChar']] = function(topMenuWindow.executeByHotKey, [hotKey.code], topMenuWindow)
+        let actionMap[hotKey['keyChar']] = function(topMenuWindow.executeByHotKey, [hotKey.keyChar], topMenuWindow)
     endfor
 
     let topMenuWindow.__actionMap = actionMap
@@ -1001,7 +1013,7 @@ let s:errorList = []
 
 function! s:showErrors()
     let opts = {}
-    let opts.w = 150
+    let opts.w = 170
     let opts.h = 10
     let opts.title = ' errors '
     let opts.padding = [0, 1, 0, 1]
@@ -1358,6 +1370,24 @@ if 0
         call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
     endif
 
+    " top menu hotkey invoke test
+    if 1
+        call s:VMenuManager.initTopMenuItems('T&est', [
+                    \["Hi\tdesc", ''],
+                    \])
+        call s:TopMenuWindow.builder()
+                    \.topMenuItemList(s:VMenuManager.__allTopMenuItemList)
+                    \.build()
+                    \.show()
+        let item = s:VMenuManager.__focusedWindow.__curItem
+        call assert_equal(3, item.hotKeyPos)
+        call assert_equal("e", item.name[item.hotKeyPos])
+        call s:VMenuManager.__focusedWindow.handleKeyStroke("e")
+        call assert_equal("Hi    desc", s:VMenuManager.__focusedWindow.__curItem.name->trim())
+        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+    endif
+
     " same top menu will be initialized only once
     if 1
         let s:VMenuManager.__allTopMenuItemList = []
@@ -1466,6 +1496,24 @@ if 0
         call assert_equal(1, s:VMenuManager.__focusedWindow.isOpen == 1)    " keep opening
         call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
         call assert_equal("vmenu: current item is not executable!", s:errorList[0])
+    endif
+
+    " inactive context item should not be executed by hotkey
+    if 1
+        let s:errorList = []
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: 'name', cmd: '', tip: '', icon: ''},
+                    \#{name: '&inactive item', cmd: '', tip: '', icon: '', deactive-if: function("s:alwaysTruePredicate")}
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.errConsumer({ msg -> add(s:errorList, msg) })
+                    \.build()
+                    \.showAtCursor()
+        call s:VMenuManager.__focusedWindow.handleKeyStroke("i")
+        call assert_equal(1, s:VMenuManager.__focusedWindow.isOpen == 1)    " keep opening
+        call assert_equal("name", s:VMenuManager.__focusedWindow.__curItem.name->trim())
+        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+        call assert_equal("vmenu: no executable item for hotkey 'i'", s:errorList[0])
     endif
 
     call s:showErrors()
