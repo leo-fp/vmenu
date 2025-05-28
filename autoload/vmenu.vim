@@ -938,6 +938,9 @@ function! s:alwaysTruePredicate(globalStatus)
 endfunction
 
 
+"-------------------------------------------------------------------------------
+" API
+"-------------------------------------------------------------------------------
 " content: parsed context item list
 function! vmenu#openContextWindow(content, opts)
     call s:ContextWindow.builder()
@@ -970,6 +973,10 @@ function! vmenu#itemTips()
     endif
 endfunction
 
+function! vmenu#existFileType(ft)
+    return { globalStatus -> s:existFileType(a:ft) }
+endfunction
+
 
 "-------------------------------------------------------------------------------
 " class Log
@@ -996,6 +1003,16 @@ endfunction
 "-------------------------------------------------------------------------------
 function! s:printWarn(msg)
     echohl WarningMsg | echo a:msg | echohl None
+endfunction
+
+function! s:existFileType(ft)
+    for i in range(1, winnr('$'))
+        if getbufvar(winbufnr(i), '&filetype') == a:ft
+            return 1
+        endif
+    endfor
+
+    return 0
 endfunction
 
 " only used in testing
@@ -1515,6 +1532,20 @@ if 0
         call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
         call assert_equal("vmenu: no executable item for hotkey 'i'", s:errorList[0])
     endif
+
+    " vmenu#existFileType test
+    if 1
+        let s:errorList = []
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: 'name', cmd: '', show-if: vmenu#existFileType("vim") },
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.build()
+                    \.showAtCursor()
+        call assert_equal("name", s:VMenuManager.__focusedWindow.__curItem.name->trim())
+        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+    endif
+
 
     call s:showErrors()
 endif

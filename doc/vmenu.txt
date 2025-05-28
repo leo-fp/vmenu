@@ -11,6 +11,7 @@ Version:	0.2.0
     3.3 vmenu#openTopMenu()...............................|vmenu#openTopMenu()|
     3.4 vmenu#itemTips().....................................|vmenu#itemTips()|
     3.5 vmenu#parse_context()...........................|vmenu#parse_context()|
+    3.6 vmenu#existFileType()...........................|vmenu#existFileType()|
 4. vmenu item field	.........................................|vmenu-item-field|
     4.1 show-ft.......................................................|show-ft|
     4.2 show-mode...................................................|show-mode|
@@ -75,6 +76,22 @@ userItemList: quickui item list or vmenu item list.
 itemVersion: g:VMENU#ITEM_VERSION.QUICKUI (default) or
 g:VMENU#ITEM_VERSION.QUICKUI
 return: inner item list that can be used in vmenu
+
+3.6 vmenu#existFileType(ft)                              *vmenu#existFileType()*
+----------------------------------------
+Check if there are any <ft> type buffer opened in current tab.
+Designed to work with show-if or deactive-if.
+
+If you want vmenu item only appears when you opened specific file type,
+regardless of where your cursor is currently.
+>
+    #{name: 'name', cmd: '', show-if: vmenu#existFileType("vim")}
+
+ft: string of file type.
+return: 1: exist. 0: not exist
+
+NOTE: If the <ft> you want to detect is only opened in other tab, this will
+return 0.
 
 ==============================================================================
 4. vmenu item field						                      *vmenu-item-field*
