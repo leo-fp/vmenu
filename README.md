@@ -99,5 +99,10 @@ define a function to `show-if` or `deactive-if` field. for more details, check `
 ## todo
 - [] mouse support
 
+## related projects
+[vim-quickui](https://github.com/skywind3000/vim-quickui)
+[which-key.nvim](https://github.com/folke/which-key.nvim)
+[menu](https://github.com/nvzone/menu)
+
 ## known problem
 * because I'm not using all features of menu and context menu, some features may missing
