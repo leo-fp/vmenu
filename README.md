@@ -10,11 +10,18 @@ case
 just have some ideas want to try, start over seems easier and tempting
 
 ## Here is what I want it to be
+### 0.2.0
 * compatible with vim and neovim (by using old vimscript and unified popup window api of vim-quickui)
 * easy to hack
 * menu and context menu already exist in my config should work as well
 * provide an enhanced context item (vmenu item) that you can control whether to show or active dynamically
 * nice default looking (I ported one from IntelliJ IDEA since I'm not good at it)
+### 0.3.0 NEXT
+* mouse support
+* better looking
+
+### 0.4.0
+* an always open top menu
 
 ## NOTE
 * This plugin may changes radically, use with caution
@@ -95,9 +102,6 @@ define a function to `show-if` or `deactive-if` field. for more details, check `
 
 ## changelog
 * 0.2.0: first releases
-
-## todo
-- [] mouse support
 
 ## related projects
 [vim-quickui](https://github.com/skywind3000/vim-quickui)
