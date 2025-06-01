@@ -395,12 +395,13 @@ function! s:ContextWindow.enter()
         let self.__subContextWindowOpen = 1
     else
         let cmd = self.contextItemList[self.__curItemIndex].cmd
+        call self.close(s:CLOSED_BY_EXEC)
         if strcharlen(cmd) > 0
-            call self.close(s:CLOSED_BY_EXEC)
-
             call execute(cmd)
             "call self.quickuiWindow.execute(cmd)
             call self.__logger.info(printf("winId: %s, execute cmd: %s", self.winId, cmd))
+        else
+            call self.__errConsumer("vmenu: the cmd is blank!")
         endif
     endif
 endfunction
@@ -1544,6 +1545,21 @@ if 0
                     \.showAtCursor()
         call assert_equal("name", s:VMenuManager.__focusedWindow.__curItem.name->trim())
         call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+    endif
+
+    " when cmd is blank, close vmenu window
+    if 1
+        let s:errorList = []
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: 'name', cmd: '', tip: '', icon: ''},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.errConsumer({ msg -> add(s:errorList, msg) })
+                    \.build()
+                    \.showAtCursor()
+        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<CR>")
+        call assert_equal(0, s:VMenuManager.__focusedWindow.isOpen)
+        call assert_equal("vmenu: the cmd is blank!", s:errorList[0])
     endif
 
 
