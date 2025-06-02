@@ -23,8 +23,9 @@
 "-------------------------------------------------------------------------------
 " constants
 "-------------------------------------------------------------------------------
-let s:CLOSED_BY_EXEC = 1
+let s:CASCADE_CLOSE = 1
 let s:CLOSED_BY_ESC = 0
+let s:NOT_IN_AREA = 2
 let g:VMENU#ITEM_VERSION = #{QUICKUI: 1, VMENU: 2}
 
 "-------------------------------------------------------------------------------
@@ -43,6 +44,17 @@ function! s:HotKey.new(keyChar, offset)
     let hotKey.code = char2nr(a:keyChar)
     let hotKey.offset = a:offset    " the index in context item list
     return hotKey
+endfunction
+
+"-------------------------------------------------------------------------------
+" class InputEvent
+"-------------------------------------------------------------------------------
+let s:InputEvent = {}
+function! s:InputEvent.new(char, clickPos=#{screencol: -1, screenrow: -1})
+    let inputEvent = deepcopy(s:InputEvent, 1)
+    let inputEvent.char = a:char
+    let inputEvent.mousepos = a:clickPos
+    return inputEvent
 endfunction
 
 "-------------------------------------------------------------------------------
@@ -73,6 +85,7 @@ function! s:VmenuWindowBuilder.new()
     let vmenuWindowBuilder.__y                   = 0    " line number
     let vmenuWindowBuilder.__traceId             = ''   " a text that will be printed in log. for debug
     let vmenuWindowBuilder.__errConsumer = function("s:printWarn")
+    let vmenuWindowBuilder.__mouseposSupplier = { -> getmousepos() }
     return vmenuWindowBuilder
 endfunction
 function! s:VmenuWindowBuilder.delay(seconds)
@@ -118,6 +131,10 @@ function! s:VmenuWindow.new()
     let vmenuWindow = deepcopy(s:VmenuWindow, 1)
     let vmenuWindow.hotKeyList = []
     let vmenuWindow.isOpen = 0
+    let vmenuWindow.x = -1 " column number
+    let vmenuWindow.y = -1 " line number
+    let vmenuWindow.winWidth = 0    " visible window width
+    let vmenuWindow.winHeight = 0    " visible window height
     let vmenuWindow.__goPreviousKey = 'l'
     let vmenuWindow.__goNextKey = 'h'
     let vmenuWindow.__closeKey            = "\<ESC>" " key to close vmenu window
@@ -158,11 +175,33 @@ function! s:VmenuWindow.executeByHotKey(char)
     call self.focusItemByIndex(self.hotKeyList[idx].offset)
     call self.enter()
 endfunction
-function! s:VmenuWindow.close(closedByExec=s:CLOSED_BY_ESC)
+function! s:VmenuWindow.executeByLeftMouse(inputEvent)
+    " calculate index of clicked item
+    let clickedIdx = self.getClickedItemIndex(a:inputEvent.mousepos)
+    call self.__logger.info("will focus at: " .. clickedIdx)
+
+    " close all vmenu window
+    if clickedIdx == -1
+        call self.close(s:NOT_IN_AREA, a:inputEvent)
+    endif
+
+    if clickedIdx != -1 && !self.canBeFocused(clickedIdx)
+        return
+    endif
+
+    if clickedIdx != -1
+        " focus the item
+        call self.focusItemByIndex(clickedIdx)
+
+        " enter
+        call self.enter()
+    endif
+endfunction
+function! s:VmenuWindow.close(closeCode, userInput={})
     call self.quickuiWindow.close()
     let self.isOpen = 0
     if has_key(self, 'parentVmenuWindow') && !empty(self.parentVmenuWindow)
-        call self.parentVmenuWindow.__onSubMenuClose(a:closedByExec)
+        call self.parentVmenuWindow.__onSubMenuClose(a:closeCode, a:userInput)
     endif
 
     " root window, stop getting user input
@@ -173,23 +212,37 @@ function! s:VmenuWindow.close(closedByExec=s:CLOSED_BY_ESC)
     endif
 endfunction
 
-function! s:VmenuWindow.__onSubMenuClose(closeCode)
-    if a:closeCode == s:CLOSED_BY_EXEC
-        call self.close(s:CLOSED_BY_EXEC)
+function! s:VmenuWindow.__onSubMenuClose(closeCode, userInput)
+    if a:closeCode == s:CASCADE_CLOSE
+        call self.close(s:CASCADE_CLOSE, a:userInput)
     else
         call s:VMenuManager.setFocusedWindow(self)
         " this will refresh tips in statusline
         call self.focusItemByIndex(self.__curItemIndex)
     endif
+
+    " the s:NOT_IN_AREA means a mouse click event occured not in sub window.
+    " let parent window try to handle this.
+    if a:closeCode == s:NOT_IN_AREA
+        call self.handleUserInput(a:userInput)
+    endif
 endfunction
 
-function! s:VmenuWindow.handleKeyStroke(char, doAfterKeyStroke={ contextWindow -> '' })
+" return: item index in context item list. if there is no valid item, return -1
+function! s:VmenuWindow.getClickedItemIndex(mousePos)
+endfunction
+
+function! s:VmenuWindow.handleUserInput(inputEvent, doAfterKeyStroke={ contextWindow -> '' })
     if self.__delayTime != 0
         execute self.__delayTime .. 'sleep'
     endif
 
-    if has_key(self.__actionMap, a:char)
-        call self.__actionMap[a:char]()
+    if a:inputEvent.char == "\<LeftMouse>"
+        call self.executeByLeftMouse(a:inputEvent)
+    endif
+
+    if has_key(self.__actionMap, a:inputEvent.char)
+        call self.__actionMap[a:inputEvent.char]()
         return
     else
         " do nothing
@@ -244,6 +297,7 @@ function! s:ContextWindow.new(contextWindowBuilder)
     let contextWindow.winId = rand(srand())
     let contextWindow.hotKeyList = []
     let contextWindow.winWidth = strcharlen(contextWindow.contextItemList[0].name)
+    let contextWindow.winHeight = contextWindow.contextItemList->len()
     let contextWindow.x = a:contextWindowBuilder.__x " column number
     let contextWindow.y = a:contextWindowBuilder.__y " line number
     let contextWindow.__delayTime = a:contextWindowBuilder.__delayTime
@@ -258,13 +312,14 @@ function! s:ContextWindow.new(contextWindowBuilder)
     let contextWindow.__subContextWindowOpen = 0
     let contextWindow.__traceId = a:contextWindowBuilder.__traceId
     let contextWindow.__errConsumer = a:contextWindowBuilder.__errConsumer
+    let contextWindow.__mouseposSupplier = a:contextWindowBuilder.__mouseposSupplier
     let contextWindow.isOpen = 0
     let contextWindow.parentVmenuWindow = a:contextWindowBuilder.__parentContextWindow
     let contextWindow.__logger = s:Log.new(contextWindow)
     call contextWindow.__logger.info(printf("new ContextWindow created, winId: %s", contextWindow.winId))
 
     let actionMap = {}
-    let actionMap[a:contextWindowBuilder.__closeKey]      = function(contextWindow.close,       [], contextWindow)
+    let actionMap[a:contextWindowBuilder.__closeKey]      = function(contextWindow.close,       [s:CLOSED_BY_ESC, s:InputEvent.new(a:contextWindowBuilder.__closeKey)], contextWindow)
     let actionMap[a:contextWindowBuilder.__goNextKey]     = function(contextWindow.focusNext,   [], contextWindow)
     let actionMap[a:contextWindowBuilder.__goPreviousKey] = function(contextWindow.focusPrev,   [], contextWindow)
     let actionMap[a:contextWindowBuilder.__goBottomKey]   = function(contextWindow.focusBottom, [], contextWindow)
@@ -310,12 +365,27 @@ function! s:ContextWindow.showAt(x, y)
 
     call s:VMenuManager.setFocusedWindow(self)
     call self.focusItemByIndex(self.__curItemIndex)
-    call self.__logger.info(printf("ContextWindow opened at x:%s, y:%s, winId: %s", self.x, self.y, self.winId))
+    call self.__logger.info(printf("ContextWindow opened at x:%s, y:%s, vmenu winId: %s,
+                \ quickui winId: %s", self.x, self.y, self.winId, self.quickuiWindow.winid))
 endfunction
 function! s:ContextWindow.showAtCursor()
     let cursorPos = quickui#core#around_cursor(self.winWidth, self.contextItemList->len())
     call self.showAt(cursorPos[1], cursorPos[0])
 endfunction
+
+function! s:ContextWindow.getClickedItemIndex(mousePos)
+    let clickedPos = #{x: a:mousePos.screencol, y: a:mousePos.screenrow}
+    let topLeftCorner = s:VMenuManager.calcTopLeftPos(self)
+    call self.__logger.info("clickedPos:" .. string(clickedPos))
+    call self.__logger.info("topLeftCorner:" .. string(topLeftCorner))
+    if (topLeftCorner.x <= clickedPos.x && clickedPos.x <= topLeftCorner.x + self.winWidth) &&
+                \ (topLeftCorner.y <= clickedPos.y && clickedPos.y <= topLeftCorner.y + self.winHeight)
+        return clickedPos.y - topLeftCorner.y
+    endif
+
+    return -1
+endfunction
+
 function! s:ContextWindow.focusItemByIndex(index)
     let self.__curItemIndex = a:index
     let self.__curItem = self.contextItemList[a:index]
@@ -395,13 +465,12 @@ function! s:ContextWindow.enter()
         let self.__subContextWindowOpen = 1
     else
         let cmd = self.contextItemList[self.__curItemIndex].cmd
-        call self.close(s:CLOSED_BY_EXEC)
         if strcharlen(cmd) > 0
+            call self.close(s:CASCADE_CLOSE)
+
             call execute(cmd)
             "call self.quickuiWindow.execute(cmd)
             call self.__logger.info(printf("winId: %s, execute cmd: %s", self.winId, cmd))
-        else
-            call self.__errConsumer("vmenu: the cmd is blank!")
         endif
     endif
 endfunction
@@ -523,6 +592,7 @@ function! s:TopMenuWindow.new(topMenuWindowBuilder)
     call extend(topMenuWindow, deepcopy(s:TopMenuWindow, 1), "force")
     let topMenuWindow.topMenuItemList = a:topMenuWindowBuilder.__topMenuItemList
     let topMenuWindow.topMenuItemList = s:ItemParser.__addPaddingInTopMenu(topMenuWindow.topMenuItemList, '  ')
+    let s:VmenuWindow.__allTopMenuItemList = topMenuWindow.topMenuItemList
     let topMenuWindow.quickuiWindow = quickui#window#new()
     let topMenuWindow.winId = rand(srand())
     let topMenuWindow.hotKeyList = []
@@ -539,12 +609,13 @@ function! s:TopMenuWindow.new(topMenuWindowBuilder)
     let topMenuWindow.__padding = 2 " spaces added on the left and right side for every item
     let topMenuWindow.__delayTime = a:topMenuWindowBuilder.__delayTime
     let topMenuWindow.__traceId = a:topMenuWindowBuilder.__traceId
+    let topMenuWindow.__mouseposSupplier = a:topMenuWindowBuilder.__mouseposSupplier
     let topMenuWindow.isOpen = 0
     let topMenuWindow.__logger = s:Log.new(topMenuWindow)
     call topMenuWindow.__logger.info(printf("new TopMenuWindow created, winId: %s", topMenuWindow.winId))
 
     let actionMap = {}
-    let actionMap[a:topMenuWindowBuilder.__closeKey]      = function(topMenuWindow.close,       [], topMenuWindow)
+    let actionMap[a:topMenuWindowBuilder.__closeKey]      = function(topMenuWindow.close,       [s:CLOSED_BY_ESC, a:topMenuWindowBuilder.__closeKey], topMenuWindow)
     let actionMap[a:topMenuWindowBuilder.__goNextKey]     = function(topMenuWindow.focusNext,   [], topMenuWindow)
     let actionMap[a:topMenuWindowBuilder.__goPreviousKey] = function(topMenuWindow.focusPrev,   [], topMenuWindow)
     let actionMap[a:topMenuWindowBuilder.__goBottomKey]   = function(topMenuWindow.focusBottom, [], topMenuWindow)
@@ -620,7 +691,7 @@ function! s:TopMenuWindow.enter()
         endif
         "call self.quickuiWindow.execute(cmd)
 
-        call self.close(1)
+        call self.close(s:CASCADE_CLOSE)
     endif
 endfunction
 " calculate start column to render focused top menu item
@@ -662,6 +733,31 @@ function! s:TopMenuWindow.__renderHighlight(offset)
         call win.syntax_region(syntax[0], syntax[1], syntax[2], syntax[3], syntax[4])
     endfor
     call win.syntax_end()
+endfunction
+
+function! s:TopMenuWindow.getClickedItemIndex(mousePos)
+    let clickedPos = #{x: a:mousePos.screencol, y: a:mousePos.screenrow}
+    let topLeftCorner = s:VMenuManager.calcTopLeftPos(self)
+    call self.__logger.info("clickedPos:" .. string(clickedPos))
+    call self.__logger.info("topLeftCorner:" .. string(topLeftCorner))
+    if clickedPos.y != 1
+        return -1
+    endif
+
+    for i in range(s:VMenuManager.__allTopMenuItemList->len())
+        if i+1 >= s:VMenuManager.__allTopMenuItemList->len()
+            return i
+        endif
+
+        " the x of top menu starts from 1, so the result of __getStartColumnNrByIndex needs a offset of 1
+        let startCol = self.__getStartColumnNrByIndex(i) + 1
+        let endCol = self.__getStartColumnNrByIndex(i+1) + 1
+        if startCol <= clickedPos.x && clickedPos.x < endCol
+            return i
+        endif
+    endfor
+
+    return -1
 endfunction
 
 
@@ -711,7 +807,13 @@ function! s:VMenuManager.startGettingUserInput()
         let code = getchar()
 
         let ch = (type(code) == v:t_number)? nr2char(code) : code
-        call self.__focusedWindow.handleKeyStroke(ch)
+
+        if ch == "\<LeftMouse>"
+            call self.__focusedWindow.handleUserInput(s:InputEvent.new("\<LeftMouse>", getmousepos()))
+            continue
+        endif
+
+        call self.__focusedWindow.handleUserInput(s:InputEvent.new(ch))
     endwhile
 endfunction
 
@@ -722,6 +824,11 @@ endfunction
  " focused context window will receive and handle input
 function! s:VMenuManager.setFocusedWindow(contextWindow)
     let self.__focusedWindow = a:contextWindow
+endfunction
+
+" top left position (inclusive) of vmenu window
+function! s:VMenuManager.calcTopLeftPos(vmenuWindow)
+    return #{x: a:vmenuWindow.x+1, y: a:vmenuWindow.y+1}
 endfunction
 
 
@@ -1016,6 +1123,11 @@ function! s:existFileType(ft)
     return 0
 endfunction
 
+function! s:createMousePosFromTopLeft(vmenuWindow, offsetX, offsetY)
+    return #{screencol: s:VMenuManager.calcTopLeftPos(a:vmenuWindow).x + a:offsetX,
+                \ screenrow: s:VMenuManager.calcTopLeftPos(a:vmenuWindow).y + a:offsetY}
+endfunction
+
 " only used in testing
 let s:testList = []
 function! vmenu#testEcho(msg)
@@ -1071,7 +1183,7 @@ if 0
                     \], g:VMENU#ITEM_VERSION.VMENU))
                     \.build()
                     \.showAtCursor()
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
     " fill name to same length test
@@ -1088,7 +1200,7 @@ if 0
                     \.build()
                     \.showAtCursor()
         call assert_equal("   1   ", s:VMenuManager.__focusedWindow.contextItemList[0].name)
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
     " seperator line test
@@ -1102,7 +1214,7 @@ if 0
                     \.showAtCursor()
         call assert_equal(1, s:VMenuManager.__focusedWindow.contextItemList[0].isSep)
         call assert_equal(" ——— ", s:VMenuManager.__focusedWindow.contextItemList[0].name)
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
 
         " vmenu item
         call s:ContextWindow.builder()
@@ -1114,7 +1226,7 @@ if 0
                     \.showAtCursor()
         call assert_equal(1, s:VMenuManager.__focusedWindow.contextItemList[0].isSep)
         call assert_equal(" ———— ", s:VMenuManager.__focusedWindow.contextItemList[0].name)
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
     " origin vim-quickui context item parse test
@@ -1164,7 +1276,7 @@ if 0
                     \.build()
                     \.showAtCursor()
         call assert_equal(1, s:VMenuManager.__focusedWindow.isOpen)
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
     " when cmd is executed, close all context window
@@ -1175,8 +1287,8 @@ if 0
                     \]))
                     \.build()
                     \.showAtCursor()
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<CR>", { contextWindow -> assert_equal(1, contextWindow.isOpen) })
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<CR>", { contextWindow -> assert_true(contextWindow.isOpen == 0 && contextWindow.parentVmenuWindow.isOpen == 0) })
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<CR>"), { contextWindow -> assert_equal(1, contextWindow.isOpen) })
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<CR>"), { contextWindow -> assert_true(contextWindow.isOpen == 0 && contextWindow.parentVmenuWindow.isOpen == 0) })
     endif
 
     " execute cmd by hotkey
@@ -1188,9 +1300,9 @@ if 0
                     \]))
                     \.build()
                     \.showAtCursor()
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("h", { contextWindow -> assert_equal(0, contextWindow.isOpen) })
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("h"), { contextWindow -> assert_equal(0, contextWindow.isOpen) })
         call assert_true(index(s:testList, msg) != -1)
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
     " open second menu by hotkey, then execute cmd by hotkey
@@ -1203,8 +1315,8 @@ if 0
                     \]))
                     \.build()
                     \.showAtCursor()
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("f", { contextWindow -> assert_true(contextWindow.isOpen == 1 && contextWindow.__subContextWindowOpen == 1) })
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("s", { contextWindow -> assert_true(contextWindow.isOpen == 0 && contextWindow.__subContextWindowOpen == 0) })
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("f"), { contextWindow -> assert_true(contextWindow.isOpen == 1 && contextWindow.__subContextWindowOpen == 1) })
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("s"), { contextWindow -> assert_true(contextWindow.isOpen == 0 && contextWindow.__subContextWindowOpen == 0) })
         call assert_true(index(s:testList, msg) != -1)
     endif
 
@@ -1219,17 +1331,17 @@ if 0
                     \.showAtCursor()
         call assert_equal('first', vmenu#itemTips())
 
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<CR>")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<CR>"))
         call assert_equal('second', vmenu#itemTips())
 
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
         call assert_equal('first', vmenu#itemTips())
 
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("j")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("j"))
         call assert_equal('test help', vmenu#itemTips())
 
         " after close, tip should be cleaned
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
         call assert_equal('', vmenu#itemTips())
     endif
 
@@ -1243,12 +1355,12 @@ if 0
                     \]))
                     \.build()
                     \.showAtCursor()
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("j")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("j"))
         call assert_equal("b", s:VMenuManager.__focusedWindow.__curItem.name->trim())
 
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("k")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("k"))
         call assert_equal("a", s:VMenuManager.__focusedWindow.__curItem.name->trim())
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
     " inactive item should not be selected
@@ -1260,10 +1372,10 @@ if 0
                     \], g:VMENU#ITEM_VERSION.VMENU))
                     \.build()
                     \.showAtCursor()
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("j")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("j"))
         call assert_equal("a", s:VMenuManager.__focusedWindow.__curItem.name->trim())
 
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
     " skip inactive item automatically
@@ -1276,12 +1388,12 @@ if 0
                     \], g:VMENU#ITEM_VERSION.VMENU))
                     \.build()
                     \.showAtCursor()
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("j")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("j"))
         call assert_equal("c", s:VMenuManager.__focusedWindow.__curItem.name->trim())
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("k")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("k"))
         call assert_equal("a", s:VMenuManager.__focusedWindow.__curItem.name->trim())
 
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
     " show-ft test
@@ -1295,7 +1407,7 @@ if 0
                     \.showAtCursor()
         call assert_equal(1, s:VMenuManager.__focusedWindow.__curItem.isVisible(#{currentFileType: 'vim'}))
         call assert_equal(0, s:VMenuManager.__focusedWindow.__curItem.isVisible(#{currentFileType: 'lua'}))
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
     " context menu hotkey position test
@@ -1308,10 +1420,10 @@ if 0
                     \.build()
                     \.showAtCursor()
         call assert_equal(-1, s:VMenuManager.__focusedWindow.__curItem.hotKeyPos)
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("j")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("j"))
         let item = s:VMenuManager.__focusedWindow.__curItem
         call assert_equal("H", item.name[item.hotKeyPos])
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
 
         call s:ContextWindow.builder()
                     \.contextItemList(s:VMenuManager.parseContextItem([
@@ -1320,10 +1432,10 @@ if 0
                     \]))
                     \.build()
                     \.showAtCursor()
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("j")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("j"))
         let item = s:VMenuManager.__focusedWindow.__curItem
         call assert_equal("H", item.name[item.hotKeyPos])
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
     " focusedLineSyntaxList test
@@ -1337,7 +1449,7 @@ if 0
         let item = s:VMenuManager.__focusedWindow.__curItem
         call assert_equal(1, item.focusedLineSyntaxList->len())
         call assert_equal(['VmenuSelect', 0, 0, 7, 0], item.focusedLineSyntaxList[0])
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
     " focusedLineSyntaxList test
@@ -1352,7 +1464,7 @@ if 0
         call assert_equal(['VmenuSelect', 0, 0, 3, 0], item.focusedLineSyntaxList[0])
         call assert_equal(['VmenuSelectedHotkey', 3, 0, 4, 0], item.focusedLineSyntaxList[1])
         call assert_equal(['VmenuSelect', 4, 0, 7, 0], item.focusedLineSyntaxList[2])
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
     " desc pos test
@@ -1367,10 +1479,10 @@ if 0
         let item = s:VMenuManager.__focusedWindow.__curItem
         call assert_equal("desc", item.name[item.descPos:item.descPos+item.descWidth-1])
 
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("j")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("j"))
         let item = s:VMenuManager.__focusedWindow.__curItem
         call assert_equal(-1, item.descPos)
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
     " top menu hotkey pos test
@@ -1385,7 +1497,7 @@ if 0
         let item = s:VMenuManager.__focusedWindow.__curItem
         call assert_equal(3, item.hotKeyPos)
         call assert_equal("e", item.name[item.hotKeyPos])
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
     " top menu hotkey invoke test
@@ -1400,10 +1512,10 @@ if 0
         let item = s:VMenuManager.__focusedWindow.__curItem
         call assert_equal(3, item.hotKeyPos)
         call assert_equal("e", item.name[item.hotKeyPos])
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("e")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("e"))
         call assert_equal("Hi    desc", s:VMenuManager.__focusedWindow.__curItem.name->trim())
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
     " same top menu will be initialized only once
@@ -1427,9 +1539,9 @@ if 0
                     \]))
                     \.build()
                     \.showAtCursor()
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("G")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("G"))
         call assert_equal("2", s:VMenuManager.__focusedWindow.__curItem.name->trim())
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
     " __fileterVisibleItems test
@@ -1459,7 +1571,7 @@ if 0
                     \.build()
                     \.showAtCursor()
         call assert_equal(1, s:VMenuManager.__focusedWindow.__curItem.isInactive(#{currentMode: 'n'}))
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
     " deactive-ft test
@@ -1472,7 +1584,7 @@ if 0
                     \.build()
                     \.showAtCursor()
         call assert_equal(1, s:VMenuManager.__focusedWindow.__curItem.isInactive(#{currentFileType: 'vim'}))
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
     " deactive-ft test
@@ -1485,7 +1597,7 @@ if 0
                     \.build()
                     \.showAtCursor()
         call assert_equal(0, s:VMenuManager.__focusedWindow.__curItem.isInactive(#{currentFileType: 'vim'}))
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
     " deactive-if test
@@ -1497,7 +1609,7 @@ if 0
                     \.build()
                     \.showAtCursor()
         call assert_equal(1, s:VMenuManager.__focusedWindow.__curItem.isInactive({}))
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
     " first item is inactive. should not be executed
@@ -1510,9 +1622,9 @@ if 0
                     \.errConsumer({ msg -> add(s:errorList, msg) })
                     \.build()
                     \.showAtCursor()
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<CR>")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<CR>"))
         call assert_equal(1, s:VMenuManager.__focusedWindow.isOpen == 1)    " keep opening
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
         call assert_equal("vmenu: current item is not executable!", s:errorList[0])
     endif
 
@@ -1527,10 +1639,10 @@ if 0
                     \.errConsumer({ msg -> add(s:errorList, msg) })
                     \.build()
                     \.showAtCursor()
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("i")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("i"))
         call assert_equal(1, s:VMenuManager.__focusedWindow.isOpen == 1)    " keep opening
         call assert_equal("name", s:VMenuManager.__focusedWindow.__curItem.name->trim())
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
         call assert_equal("vmenu: no executable item for hotkey 'i'", s:errorList[0])
     endif
 
@@ -1544,24 +1656,120 @@ if 0
                     \.build()
                     \.showAtCursor()
         call assert_equal("name", s:VMenuManager.__focusedWindow.__curItem.name->trim())
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<ESC>")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
-    " when cmd is blank, close vmenu window
+    " close context menu if clicked position is not in context window area
     if 1
-        let s:errorList = []
         call s:ContextWindow.builder()
                     \.contextItemList(s:VMenuManager.parseContextItem([
-                    \#{name: 'name', cmd: '', tip: '', icon: ''},
+                    \#{name: 'name', cmd: ''},
                     \], g:VMENU#ITEM_VERSION.VMENU))
-                    \.errConsumer({ msg -> add(s:errorList, msg) })
                     \.build()
                     \.showAtCursor()
-        call s:VMenuManager.__focusedWindow.handleKeyStroke("\<CR>")
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<LeftMouse>", s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow, -1, -1)))
         call assert_equal(0, s:VMenuManager.__focusedWindow.isOpen)
-        call assert_equal("vmenu: the cmd is blank!", s:errorList[0])
     endif
 
+    " seperator line should not be clicked
+    if 1
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: 'name', cmd: ''},
+                    \#{isSep: 1},
+                    \#{name: 'name2', cmd: ''},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.build()
+                    \.showAtCursor()
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<LeftMouse>", s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow, 0, 1)))
+        call assert_equal(1, s:VMenuManager.__focusedWindow.isOpen == 1)    " keep opening
+        call assert_equal("name", s:VMenuManager.__focusedWindow.__curItem.name->trim())
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+    endif
+
+    " inactive item should not be clicked
+    if 1
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: 'name', cmd: ''},
+                    \#{name: 'name2', cmd: '', deactive-if: function('s:alwaysTruePredicate')},
+                    \#{name: 'name2', cmd: ''},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.build()
+                    \.showAtCursor()
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<LeftMouse>", s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow, 0, 1)))
+        call assert_equal(1, s:VMenuManager.__focusedWindow.isOpen == 1)    " keep opening
+        call assert_equal("name", s:VMenuManager.__focusedWindow.__curItem.name->trim())
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+    endif
+
+    " top menu: click and open sub menu
+    if 1
+        let s:VMenuManager.__allTopMenuItemList = []
+        call s:VMenuManager.initTopMenuItems('T&est-mouse-click', [
+                    \["Hi\tdesc", ''],
+                    \])
+        call s:VMenuManager.initTopMenuItems('&Test2-mouse-click', [
+                    \["Hi2\tdesc", ''],
+                    \])
+        call s:TopMenuWindow.builder()
+                    \.topMenuItemList(s:VMenuManager.__allTopMenuItemList)
+                    \.build()
+                    \.show()
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<LeftMouse>", s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow, 25, 0)))
+        call assert_equal("   Hi2    desc  ", s:VMenuManager.__focusedWindow.__curItem.name)
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+    endif
+
+    " top menu: click boundary of item
+    if 1
+        " right boundary
+        let s:VMenuManager.__allTopMenuItemList = []
+        call s:VMenuManager.initTopMenuItems('1', [
+                    \["1", ''],
+                    \])
+        call s:VMenuManager.initTopMenuItems('2', [
+                    \["2", ''],
+                    \])
+        call s:TopMenuWindow.builder()
+                    \.topMenuItemList(s:VMenuManager.__allTopMenuItemList)
+                    \.build()
+                    \.show()
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<LeftMouse>", s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow, 4, 0)))
+        call assert_equal("1", s:VMenuManager.__focusedWindow.__curItem.name->trim())
+        call assert_equal(1, s:VMenuManager.__focusedWindow.isOpen)
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+
+        " left boundary
+        call s:TopMenuWindow.builder()
+                    \.topMenuItemList(s:VMenuManager.__allTopMenuItemList)
+                    \.traceId("xxx")
+                    \.build()
+                    \.show()
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<LeftMouse>", s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow, 5, 0)))
+        call assert_equal("2", s:VMenuManager.__focusedWindow.__curItem.name->trim())
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+    endif
+
+    " context menu: click event can be handled by parent window
+    if 1
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: 'name', cmd: '', subItemList: [#{name: 'sub name', cmd: ''}]},
+                    \#{name: 'name2', cmd: '', subItemList: [#{name: 'sub name2', cmd: ''}]},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.build()
+                    \.showAtCursor()
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<LeftMouse>", s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow, 0, 0)))
+        call assert_equal("sub name", s:VMenuManager.__focusedWindow.__curItem.name->trim())
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<LeftMouse>", s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow.parentVmenuWindow, 0, 1)))
+        call assert_equal("sub name2", s:VMenuManager.__focusedWindow.__curItem.name->trim())
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+    endif
 
     call s:showErrors()
 endif
