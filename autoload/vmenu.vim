@@ -74,7 +74,7 @@ hi! VmenuSelectedHotkey gui=underline guibg=#2E436E guifg=#BEC0C6
 let s:VmenuWindowBuilder = {}
 function! s:VmenuWindowBuilder.new()
     let vmenuWindowBuilder = deepcopy(s:VmenuWindowBuilder, 1)
-    let vmenuWindowBuilder.__delayTime           = 0    " delay time before handling key stroke
+    let vmenuWindowBuilder.__delayTime           = 0    " delay time (seconds) before handling key stroke
     let vmenuWindowBuilder.__parentContextWindow = {}   " parent vmenu window
     let vmenuWindowBuilder.__goPreviousKey       = 'k'  " key to focus previous item
     let vmenuWindowBuilder.__goNextKey           = 'j'  " key to focus next item
@@ -453,6 +453,7 @@ function! s:ContextWindow.enter()
         let subContextWindow = s:ContextWindow.builder()
                     \.contextItemList(subItemList)
                     \.parentVmenuWindow(self)
+                    \.delay(self.__delayTime)
                     \.build()
         let x = self.x + self.winWidth
         let y = self.y + self.__curItemIndex
