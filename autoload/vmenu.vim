@@ -86,6 +86,7 @@ function! s:VmenuWindowBuilder.new()
     let vmenuWindowBuilder.__traceId             = ''   " a text that will be printed in log. for debug
     let vmenuWindowBuilder.__errConsumer = function("s:printWarn")
     let vmenuWindowBuilder.__mouseposSupplier = { -> getmousepos() }
+    let vmenuWindowBuilder.__minWidth = 0   " minimal window width. only supported in context menu
     return vmenuWindowBuilder
 endfunction
 function! s:VmenuWindowBuilder.delay(seconds)
@@ -118,6 +119,10 @@ function! s:VmenuWindowBuilder.traceId(traceId)
 endfunction
 function! s:VmenuWindowBuilder.errConsumer(errConsumer)
     let self.__errConsumer = a:errConsumer
+    return self
+endfunction
+function! s:VmenuWindowBuilder.minWidth(width)
+    let self.__minWidth = a:width
     return self
 endfunction
 function! s:VmenuWindowBuilder.build()
@@ -292,6 +297,7 @@ function! s:ContextWindow.new(contextWindowBuilder)
     let contextWindow.contextItemList = s:ItemParser.__fillNameToSameLength(contextWindow.contextItemList)
     let contextWindow.contextItemList = s:ItemParser.__addIcon(contextWindow.contextItemList)
     let contextWindow.contextItemList = s:ItemParser.__addPaddingInContextMenu(contextWindow.contextItemList)
+    let contextWindow.contextItemList = s:ItemParser.__stretchingIfNeed(contextWindow.contextItemList, a:contextWindowBuilder.__minWidth)
     let contextWindow.contextItemList = s:ItemParser.__renderSeparatorLine(contextWindow.contextItemList)
     let contextWindow.quickuiWindow = quickui#window#new()
     let contextWindow.winId = rand(srand())
@@ -542,6 +548,7 @@ function! s:ContextItem.new(dict)
     let contextItem.isSep           = get(a:dict, 'isSep', 0)        " is seperator line. 0: false, 1: true
     let contextItem.descPos         = get(a:dict, 'descPos', -1)     " offset of shortKey
     let contextItem.descWidth       = get(a:dict, 'descWidth', 0)    " length of shortKey
+    let contextItem.stretchingIndex = -1    " the index for stretching. used for minWidth
     let contextItem.focusedLineSyntaxList       = []
     return contextItem
 endfunction
@@ -610,6 +617,7 @@ function! s:TopMenuWindow.new(topMenuWindowBuilder)
     let topMenuWindow.__padding = 2 " spaces added on the left and right side for every item
     let topMenuWindow.__delayTime = a:topMenuWindowBuilder.__delayTime
     let topMenuWindow.__traceId = a:topMenuWindowBuilder.__traceId
+    let topMenuWindow.__errConsumer = a:topMenuWindowBuilder.__errConsumer
     let topMenuWindow.__mouseposSupplier = a:topMenuWindowBuilder.__mouseposSupplier
     let topMenuWindow.isOpen = 0
     let topMenuWindow.__logger = s:Log.new(topMenuWindow)
@@ -960,7 +968,6 @@ function! s:ItemParser.parseQuickuiItem(quickuiItem)
                 \)
 endfunction
 
-" TODO: should be inclucded in context window class
 function! s:ItemParser.__fillNameToSameLength(contextItemList)
     let workingContextItemList = deepcopy(a:contextItemList, 1)
     let maxNameLen = reduce(workingContextItemList, { acc, val -> max([acc, strcharlen(val.name)]) }, 0)
@@ -968,6 +975,7 @@ function! s:ItemParser.__fillNameToSameLength(contextItemList)
         if strcharlen(contextItem.name) < maxNameLen
             let contextItem.name = contextItem.name .. repeat(' ', maxNameLen - strcharlen(contextItem.name))
         endif
+        let contextItem.stretchingIndex = maxNameLen
     endfor
     return workingContextItemList
 endfunction
@@ -984,10 +992,11 @@ endfunction
 function! s:ItemParser.__addPaddingInContextMenu(contextItemList)
     let workingContextItemList = deepcopy(a:contextItemList, 1)
     for contextItem in workingContextItemList
-        let padding = '  '
-        let contextItem.name = padding .. contextItem.name .. '  '
+        let paddingLeft = '  '
+        let contextItem.name = paddingLeft .. contextItem.name .. '  '
         let contextItem.descPos = strcharlen(contextItem.shortKey) > 0 ?
-                    \ contextItem.descPos + strcharlen(padding) : -1 " adjust desc pos
+                    \ contextItem.descPos + strcharlen(paddingLeft) : -1 " adjust desc pos
+        let contextItem.stretchingIndex = contextItem.stretchingIndex + strcharlen(paddingLeft) " adjust stretching index
         let contextItem.hotKeyPos = contextItem.hotKeyPos == -1 ? -1 : contextItem.hotKeyPos + 2
     endfor
     return workingContextItemList
@@ -1006,10 +1015,24 @@ function! s:ItemParser.__addIcon(contextItemList)
     let workingContextItemList = deepcopy(a:contextItemList, 1)
     let maxIconLen = reduce(workingContextItemList, { acc, val -> max([acc, strcharlen(val.icon)]) }, 0)
     for contextItem in workingContextItemList
-        let s = contextItem.icon .. repeat(' ', maxIconLen-strcharlen(contextItem.icon)) .. ' '
-        let contextItem.name = s .. contextItem.name
-        let contextItem.descPos = contextItem.descPos + strcharlen(s)  " adjust desc pos
-        let contextItem.hotKeyPos = contextItem.hotKeyPos == -1 ? -1 : contextItem.hotKeyPos + strcharlen(s)
+        let iconPart = contextItem.icon .. repeat(' ', maxIconLen-strcharlen(contextItem.icon)) .. ' '
+        let contextItem.name = iconPart .. contextItem.name
+        let contextItem.descPos = contextItem.descPos + strcharlen(iconPart)  " adjust desc pos
+        let contextItem.hotKeyPos = contextItem.hotKeyPos == -1 ? -1 : contextItem.hotKeyPos + strcharlen(iconPart)
+        let contextItem.stretchingIndex = contextItem.stretchingIndex == -1 ? -1 : contextItem.stretchingIndex + strcharlen(iconPart)
+    endfor
+    return workingContextItemList
+endfunction
+function! s:ItemParser.__stretchingIfNeed(contextItemList, minWidth)
+    let workingContextItemList = deepcopy(a:contextItemList, 1)
+    for contextItem in workingContextItemList
+        let stretchingPart = repeat(' ', max([0, a:minWidth - strcharlen(contextItem.name)]))
+        let contextItem.name = strcharpart(contextItem.name, 0, contextItem.stretchingIndex)
+                    \ .. stretchingPart
+                    \ .. strcharpart(contextItem.name, contextItem.stretchingIndex, strcharlen(contextItem.name))
+        let contextItem.descPos = strcharlen(contextItem.shortKey) > 0 ?
+                    \ contextItem.descPos + strcharlen(stretchingPart) : -1 " adjust desc pos
+        let contextItem.stretchingIndex = contextItem.stretchingIndex + strcharlen(stretchingPart) " adjust stretching index
     endfor
     return workingContextItemList
 endfunction
@@ -1112,6 +1135,7 @@ endfunction
 "-------------------------------------------------------------------------------
 function! s:printWarn(msg)
     echohl WarningMsg | echo a:msg | echohl None
+    echom a:msg
 endfunction
 
 function! s:existFileType(ft)
@@ -1746,7 +1770,6 @@ if 0
         " left boundary
         call s:TopMenuWindow.builder()
                     \.topMenuItemList(s:VMenuManager.__allTopMenuItemList)
-                    \.traceId("xxx")
                     \.build()
                     \.show()
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<LeftMouse>", s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow, 5, 0)))
@@ -1769,6 +1792,33 @@ if 0
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<LeftMouse>", s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow.parentVmenuWindow, 0, 1)))
         call assert_equal("sub name2", s:VMenuManager.__focusedWindow.__curItem.name->trim())
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+    endif
+
+    " context menu: minimal window width test
+    if 1
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: '1', cmd: ''},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.minWidth(10)
+                    \.build()
+                    \.showAtCursor()
+        call assert_equal(10, s:VMenuManager.__focusedWindow.winWidth)
+        call assert_equal('   1      ', s:VMenuManager.__focusedWindow.__curItem.name)
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+
+        " seperator line
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{isSep: 1},
+                    \#{name: '1', cmd: '', icon: "i"},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.minWidth(10)
+                    \.build()
+                    \.showAtCursor()
+        call assert_equal(10, s:VMenuManager.__focusedWindow.winWidth)
+        call assert_equal("————————", s:VMenuManager.__focusedWindow.__curItem.name->trim())
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
