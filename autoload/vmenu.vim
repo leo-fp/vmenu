@@ -85,7 +85,6 @@ function! s:VmenuWindowBuilder.new()
     let vmenuWindowBuilder.__y                   = 0    " line number
     let vmenuWindowBuilder.__traceId             = ''   " a text that will be printed in log. for debug
     let vmenuWindowBuilder.__errConsumer = function("s:printWarn")
-    let vmenuWindowBuilder.__mouseposSupplier = { -> getmousepos() }
     return vmenuWindowBuilder
 endfunction
 function! s:VmenuWindowBuilder.delay(seconds)
@@ -312,7 +311,6 @@ function! s:ContextWindow.new(contextWindowBuilder)
     let contextWindow.__subContextWindowOpen = 0
     let contextWindow.__traceId = a:contextWindowBuilder.__traceId
     let contextWindow.__errConsumer = a:contextWindowBuilder.__errConsumer
-    let contextWindow.__mouseposSupplier = a:contextWindowBuilder.__mouseposSupplier
     let contextWindow.isOpen = 0
     let contextWindow.parentVmenuWindow = a:contextWindowBuilder.__parentContextWindow
     let contextWindow.__logger = s:Log.new(contextWindow)
@@ -610,7 +608,6 @@ function! s:TopMenuWindow.new(topMenuWindowBuilder)
     let topMenuWindow.__padding = 2 " spaces added on the left and right side for every item
     let topMenuWindow.__delayTime = a:topMenuWindowBuilder.__delayTime
     let topMenuWindow.__traceId = a:topMenuWindowBuilder.__traceId
-    let topMenuWindow.__mouseposSupplier = a:topMenuWindowBuilder.__mouseposSupplier
     let topMenuWindow.isOpen = 0
     let topMenuWindow.__logger = s:Log.new(topMenuWindow)
     call topMenuWindow.__logger.info(printf("new TopMenuWindow created, winId: %s", topMenuWindow.winId))
