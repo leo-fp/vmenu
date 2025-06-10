@@ -454,29 +454,36 @@ function! s:ContextWindow.enter()
 
     let subItemList = self.contextItemList[self.__curItemIndex].subItemList
     if (!subItemList->empty())
-        let subContextWindow = s:ContextWindow.builder()
-                    \.contextItemList(subItemList)
-                    \.parentVmenuWindow(self)
-                    \.delay(self.__delayTime)
-                    \.build()
-        let x = self.x + self.winWidth
-        let y = self.y + self.__curItemIndex
-
-        " if there are insufficient space for sub context window at right side, then open at left side
-        if self.x + self.winWidth + subContextWindow.winWidth > &columns
-            let x = self.x - subContextWindow.winWidth
-        endif
-        call subContextWindow.showAt(x, y)
-        let self.__subContextWindowOpen = 1
+        call self.__expand()
     else
-        let cmd = self.contextItemList[self.__curItemIndex].cmd
-        if strcharlen(cmd) > 0
-            call self.close(s:CASCADE_CLOSE)
+        call self.__execute()
+    endif
+endfunction
+function! s:ContextWindow.__expand()
+    let subItemList = self.contextItemList[self.__curItemIndex].subItemList
+    let subContextWindow = s:ContextWindow.builder()
+                \.contextItemList(subItemList)
+                \.parentVmenuWindow(self)
+                \.delay(self.__delayTime)
+                \.build()
+    let x = self.x + self.winWidth
+    let y = self.y + self.__curItemIndex
 
-            call execute(cmd)
-            "call self.quickuiWindow.execute(cmd)
-            call self.__logger.info(printf("winId: %s, execute cmd: %s", self.winId, cmd))
-        endif
+    " if there are insufficient space for sub context window at right side, then open at left side
+    if self.x + self.winWidth + subContextWindow.winWidth > &columns
+        let x = self.x - subContextWindow.winWidth
+    endif
+    call subContextWindow.showAt(x, y)
+    let self.__subContextWindowOpen = 1
+endfunction
+function! s:ContextWindow.__execute()
+    let cmd = self.contextItemList[self.__curItemIndex].cmd
+    if strcharlen(cmd) > 0
+        call self.close(s:CASCADE_CLOSE)
+
+        call execute(cmd)
+        "call self.quickuiWindow.execute(cmd)
+        call self.__logger.info(printf("winId: %s, execute cmd: %s", self.winId, cmd))
     endif
 endfunction
 function! s:ContextWindow.__render()
