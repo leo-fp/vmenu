@@ -56,7 +56,15 @@ currently.
 
 3.2 vmenu#installTopMenu(name, userTopMenu)				*vmenu#installTopMenu()*
 -------------------------
-install top menu
+install top menu.
+userTopMenu: the context menu items.
+context items of vim-quickui and vmenu can be mixed like this: >
+    call vmenu#installTopMenu('menu_name', [
+                \ [ "vim-quickui item name", '', ""] ,
+                \ ] +  vmenu#parse_context([
+                    \#{name: 'vmenu item name', cmd: ''},
+                    \], g:VMENU#ITEM_VERSION.VMENU)
+                \)
 
 3.3 vmenu#openTopMenu()				        	           *vmenu#openTopMenu()*
 ------------------
