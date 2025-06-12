@@ -351,6 +351,10 @@ endfunction
 " x: column number
 " y: line number
 function! s:ContextWindow.showAt(x, y)
+    if empty(self.contextItemList)
+        throw "NoVisibleItemException"
+    endif
+
     let opts = {}
     let text = self.__render()
     let opts.h = self.contextItemList->len()
@@ -555,6 +559,7 @@ function! s:ContextItem.new(dict)
     let contextItem.descWidth       = get(a:dict, 'descWidth', 0)    " length of shortKey
     let contextItem.stretchingIndex = -1    " the index for stretching. used for minWidth
     let contextItem.focusedLineSyntaxList       = []
+    let contextItem.itemVersion     = get(a:dict, 'itemVersion', 0)  " context item version. see: g:VMENU#ITEM_VERSION
     return contextItem
 endfunction
 
@@ -569,6 +574,9 @@ function! s:TopMenuItem.new(name, hotKey, hotKeyPos, contextItemList)
     let topMenuItem.hotKey = a:hotKey
     let topMenuItem.contextItemList = deepcopy(a:contextItemList, 1)
     return topMenuItem
+endfunction
+function! s:TopMenuItem.appendTopMenuItems(contextItemList)
+    call extend(self.contextItemList, deepcopy(a:contextItemList, 1))
 endfunction
 
 "-------------------------------------------------------------------------------
@@ -690,13 +698,21 @@ function! s:TopMenuWindow.enter()
     if (!subItemList->empty())
         let x = self.__getStartColumnNrByIndex(self.__curItemIndex)
         let y = 1
-        let subContextWindow = s:ContextWindow.builder()
-                    \.contextItemList(subItemList)
-                    \.parentVmenuWindow(self)
-                    \.build()
-                    \.showAt(x, y)
+        try
+            let subContextWindow = s:ContextWindow.builder()
+                        \.contextItemList(subItemList)
+                        \.parentVmenuWindow(self)
+                        \.build()
+                        \.showAt(x, y)
+        catch "NoVisibleItemException"
+            return
+        endtry
         let self.__subContextWindowOpen = 1
     else
+        if !has_key(self.topMenuItemList[self.__curItemIndex], 'cmd')
+            return
+        endif
+
         let cmd = self.topMenuItemList[self.__curItemIndex].cmd
         if strcharlen(cmd) > 0
             exec cmd
@@ -808,8 +824,13 @@ function! s:VMenuManager.initTopMenuItems(name, userItemList)
         return
     endif
 
-    let dropMenu = s:VMenuManager.parseContextItem(a:userItemList)
-    let topMenuItem = s:TopMenuItem.new(topItem.name, topItem.hotKey, topItem.hotKeyPos, dropMenu)
+    " the userItemList may mixed with vim-qucikui items and parsed vmenu items.
+    " for the latter, just use directely
+    let IsParsedVmenuItems = { idx, val -> type(val) == v:t_dict && has_key(val, 'itemVersion') && val.itemVersion == g:VMENU#ITEM_VERSION.VMENU }
+    let dropMenuVmenu = filter(copy(a:userItemList), IsParsedVmenuItems)
+
+    let dropMenuQuickui = s:VMenuManager.parseContextItem(filter(a:userItemList, { idx, val -> !IsParsedVmenuItems(idx, val) }))
+    let topMenuItem = s:TopMenuItem.new(topItem.name, topItem.hotKey, topItem.hotKeyPos, dropMenuQuickui + dropMenuVmenu)
     call add(s:VMenuManager.__allTopMenuItemList, topMenuItem)
     return topMenuItem
 endfunction
@@ -916,7 +937,8 @@ function! s:ItemParser.parseVMenuItem(userItem)
                 \isVisible: VisiblePredicate,
                 \isInactive: DeactivePredicate,
                 \subItemList: subItemList,
-                \isSep: isSep
+                \isSep: isSep,
+                \itemVersion: g:VMENU#ITEM_VERSION.VMENU
                 \})
 endfunction
 function! s:ItemParser.parseQuickuiItem(quickuiItem)
@@ -968,7 +990,8 @@ function! s:ItemParser.parseQuickuiItem(quickuiItem)
                 \subItemList: subItemList,
                 \descPos: descPos,
                 \descWidth: descWidth,
-                \isSep: isSep}
+                \isSep: isSep,
+                \itemVersion: g:VMENU#ITEM_VERSION.QUICKUI}
                 \)
 endfunction
 
@@ -1092,6 +1115,17 @@ function! vmenu#parse_context(userItemList, itemVersion=g:VMENU#ITEM_VERSION.QUI
 endfunction
 function! vmenu#installTopMenu(name, userTopMenu)
     call s:VMenuManager.initTopMenuItems(a:name ,a:userTopMenu)
+endfunction
+function! vmenu#appendTopMenu(name, vmenuItems)
+    let topItem = s:ItemParser.parseQuickuiItem([a:name])
+    let idx = indexof(s:VMenuManager.__allTopMenuItemList, {i, v -> v.name == topItem.name})
+    let dropMenu = s:VMenuManager.parseContextItem(a:vmenuItems, g:VMENU#ITEM_VERSION.VMENU)
+    if idx == -1
+        let topMenuItem = s:TopMenuItem.new(topItem.name, topItem.hotKey, topItem.hotKeyPos, dropMenu)
+        call add(s:VMenuManager.__allTopMenuItemList, topMenuItem)
+    else
+        call s:VMenuManager.__allTopMenuItemList[idx].appendTopMenuItems(dropMenu)
+    endif
 endfunction
 function! vmenu#openTopMenu()
     call s:TopMenuWindow.builder()
@@ -1824,6 +1858,42 @@ if 0
         call assert_equal(10, s:VMenuManager.__focusedWindow.winWidth)
         call assert_equal("————————", s:VMenuManager.__focusedWindow.__curItem.name->trim())
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+    endif
+
+    " top menu: append quickui top menu with vmenu item
+    if 1
+        let s:VMenuManager.__allTopMenuItemList = []
+        call s:VMenuManager.initTopMenuItems('T&est-dd137fdf-13f1-4391-99e7-afaea647b450', [
+                    \["1", ''],
+                    \] + vmenu#parse_context([
+                    \#{name: '2', cmd: ''},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+        call s:TopMenuWindow.builder()
+                    \.topMenuItemList(s:VMenuManager.__allTopMenuItemList)
+                    \.build()
+                    \.show()
+        call assert_equal(2, s:VMenuManager.__allTopMenuItemList[0].contextItemList->len())
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<CR>"))
+        call assert_equal("1", s:VMenuManager.__focusedWindow.__curItem.name->trim())
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("j"))
+        call assert_equal("2", s:VMenuManager.__focusedWindow.__curItem.name->trim())
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+    endif
+
+    " do nothing if sub menu are empty in top menu
+    if 1
+        let s:VMenuManager.__allTopMenuItemList = []
+        call s:VMenuManager.initTopMenuItems('T&est-empty-sub-menu', [])
+        call s:TopMenuWindow.builder()
+                    \.topMenuItemList(s:VMenuManager.__allTopMenuItemList)
+                    \.build()
+                    \.show()
+        "call s:VMenuManager.startGettingUserInput()
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<CR>"))
+        call assert_equal("Test-empty-sub-menu", s:VMenuManager.__focusedWindow.__curItem.name->trim())
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+        call assert_equal(0, s:VMenuManager.__focusedWindow.isOpen)
     endif
 
     call s:showErrors()
