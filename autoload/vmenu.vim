@@ -269,6 +269,7 @@ function! s:ContextWindowBuilder.new()
     let contextWindowBuilder.__closeKey = "\<ESC>"
     let contextWindowBuilder.__confirmKey = "\<CR>"
     let contextWindowBuilder.__goBottomKey = 'G'
+    let contextWindowBuilder.__executor = { cmd -> execute(cmd) }
     return contextWindowBuilder
 endfunction
 function! s:ContextWindowBuilder.contextItemList(contextItemList)
@@ -317,6 +318,7 @@ function! s:ContextWindow.new(contextWindowBuilder)
     let contextWindow.__subContextWindowOpen = 0
     let contextWindow.__traceId = a:contextWindowBuilder.__traceId
     let contextWindow.__errConsumer = a:contextWindowBuilder.__errConsumer
+    let contextWindow.__executor = a:contextWindowBuilder.__executor
     let contextWindow.isOpen = 0
     let contextWindow.parentVmenuWindow = a:contextWindowBuilder.__parentContextWindow
     let contextWindow.__logger = s:Log.new(contextWindow)
@@ -485,8 +487,7 @@ function! s:ContextWindow.__execute()
     if strcharlen(cmd) > 0
         call self.close(s:CASCADE_CLOSE)
 
-        call execute(cmd)
-        "call self.quickuiWindow.execute(cmd)
+        call self.__executor(cmd)
         call self.__logger.info(printf("winId: %s, execute cmd: %s", self.winId, cmd))
     endif
 endfunction
