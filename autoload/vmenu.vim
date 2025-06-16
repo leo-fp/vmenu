@@ -24,7 +24,7 @@
 " constants
 "-------------------------------------------------------------------------------
 let s:CASCADE_CLOSE = 1
-let s:CLOSED_BY_ESC = 0
+let s:CLOSE_SELF_ONLY = 0
 let s:NOT_IN_AREA = 2
 let g:VMENU#ITEM_VERSION = #{QUICKUI: 1, VMENU: 2}
 
@@ -44,6 +44,16 @@ function! s:HotKey.new(keyChar, offset)
     let hotKey.code = char2nr(a:keyChar)
     let hotKey.offset = a:offset    " the index in context item list
     return hotKey
+endfunction
+
+"-------------------------------------------------------------------------------
+" class CallbackItemParam
+"-------------------------------------------------------------------------------
+let s:CallbackItemParam = {}
+function! s:CallbackItemParam.new(contextItem)
+    let callbackItemParam = deepcopy(s:CallbackItemParam, 1)
+    let callbackItemParam.cmd = a:contextItem.cmd
+    return callbackItemParam
 endfunction
 
 "-------------------------------------------------------------------------------
@@ -270,7 +280,7 @@ function! s:ContextWindowBuilder.new()
     let contextWindowBuilder.__closeKey = "\<ESC>"
     let contextWindowBuilder.__confirmKey = "\<CR>"
     let contextWindowBuilder.__goBottomKey = 'G'
-    let contextWindowBuilder.__executor = { cmd -> execute(cmd) }
+    let contextWindowBuilder.__executor = { callbackItemParam -> execute(callbackItemParam.cmd) }
     return contextWindowBuilder
 endfunction
 function! s:ContextWindowBuilder.contextItemList(contextItemList)
@@ -326,7 +336,7 @@ function! s:ContextWindow.new(contextWindowBuilder)
     call contextWindow.__logger.info(printf("new ContextWindow created, winId: %s", contextWindow.winId))
 
     let actionMap = {}
-    let actionMap[a:contextWindowBuilder.__closeKey]      = function(contextWindow.close,       [s:CLOSED_BY_ESC, s:InputEvent.new(a:contextWindowBuilder.__closeKey)], contextWindow)
+    let actionMap[a:contextWindowBuilder.__closeKey]      = function(contextWindow.close,       [s:CLOSE_SELF_ONLY, s:InputEvent.new(a:contextWindowBuilder.__closeKey)], contextWindow)
     let actionMap[a:contextWindowBuilder.__goNextKey]     = function(contextWindow.focusNext,   [], contextWindow)
     let actionMap[a:contextWindowBuilder.__goPreviousKey] = function(contextWindow.focusPrev,   [], contextWindow)
     let actionMap[a:contextWindowBuilder.__goBottomKey]   = function(contextWindow.focusBottom, [], contextWindow)
@@ -484,12 +494,12 @@ function! s:ContextWindow.__expand()
     let self.__subContextWindowOpen = 1
 endfunction
 function! s:ContextWindow.__execute()
-    let cmd = self.contextItemList[self.__curItemIndex].cmd
-    if strcharlen(cmd) > 0
+    let curItem = self.contextItemList[self.__curItemIndex]
+    if strcharlen(curItem.cmd) > 0
         call self.close(s:CASCADE_CLOSE)
 
-        call self.__executor(cmd)
-        call self.__logger.info(printf("winId: %s, execute cmd: %s", self.winId, cmd))
+        call self.__executor(s:CallbackItemParam.new(curItem))
+        call self.__logger.info(printf("winId: %s, execute cmd: %s", self.winId, curItem.cmd))
     endif
 endfunction
 function! s:ContextWindow.__render()
@@ -651,7 +661,7 @@ function! s:TopMenuWindow.new(topMenuWindowBuilder)
     call topMenuWindow.__logger.info(printf("new TopMenuWindow created, winId: %s", topMenuWindow.winId))
 
     let actionMap = {}
-    let actionMap[a:topMenuWindowBuilder.__closeKey]      = function(topMenuWindow.close,       [s:CLOSED_BY_ESC, a:topMenuWindowBuilder.__closeKey], topMenuWindow)
+    let actionMap[a:topMenuWindowBuilder.__closeKey]      = function(topMenuWindow.close,       [s:CLOSE_SELF_ONLY, a:topMenuWindowBuilder.__closeKey], topMenuWindow)
     let actionMap[a:topMenuWindowBuilder.__goNextKey]     = function(topMenuWindow.focusNext,   [], topMenuWindow)
     let actionMap[a:topMenuWindowBuilder.__goPreviousKey] = function(topMenuWindow.focusPrev,   [], topMenuWindow)
     let actionMap[a:topMenuWindowBuilder.__goBottomKey]   = function(topMenuWindow.focusBottom, [], topMenuWindow)
