@@ -1141,9 +1141,13 @@ function! vmenu#openContextWindow(content, opts)
         let contextWindowBuilder = contextWindowBuilder.globalStatusSupplier({ -> globalStatus})
     endif
 
-    call contextWindowBuilder.build()
-                \.showAtCursor()
-    call s:VMenuManager.startGettingUserInput()
+    try
+        call contextWindowBuilder.build()
+                    \.showAtCursor()
+        call s:VMenuManager.startGettingUserInput()
+    catch "NoVisibleItemException"
+        return
+    endtry
 endfunction
 " userItemList: quickui context menu or vmenu context menu
 " return parsed context item list
