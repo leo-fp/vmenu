@@ -109,6 +109,14 @@ let content = vmenu#parse_context([
 call vmenu#openContextWindow(content, {})
 
 ```
+
+* if you want define a vmenu item that only appears in specific mode
+```vimscript
+call vmenu#openContextWindow(vmenu#parse_context([
+            \#{name: 'visual mode only item', cmd: '', show-mode: ["v"]},
+            \], g:VMENU#ITEM_VERSION.VMENU), #{curMode: 'v'})
+
+```
 * if you want a more flexible way to control vmenu item show status or deactive status, you can
 define a function to `show-if` or `deactive-if` field. for more details, check `:h vmenu`
 

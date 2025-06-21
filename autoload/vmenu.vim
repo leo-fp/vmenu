@@ -97,6 +97,7 @@ function! s:VmenuWindowBuilder.new()
     let vmenuWindowBuilder.__traceId             = ''   " a text that will be printed in log. for debug
     let vmenuWindowBuilder.__errConsumer = function("s:printWarn")
     let vmenuWindowBuilder.__minWidth = 0   " minimal window width. only supported in context menu
+    let vmenuWindowBuilder.__globalStatusSupplier = function("s:getGlobalStatus")
     return vmenuWindowBuilder
 endfunction
 function! s:VmenuWindowBuilder.delay(seconds)
@@ -133,6 +134,10 @@ function! s:VmenuWindowBuilder.errConsumer(errConsumer)
 endfunction
 function! s:VmenuWindowBuilder.minWidth(width)
     let self.__minWidth = a:width
+    return self
+endfunction
+function! s:VmenuWindowBuilder.globalStatusSupplier(globalStatusSupplier)
+    let self.__globalStatusSupplier = a:globalStatusSupplier
     return self
 endfunction
 function! s:VmenuWindowBuilder.build()
@@ -302,7 +307,7 @@ endfunction
 function! s:ContextWindow.new(contextWindowBuilder)
     let contextWindow = s:VmenuWindow.new()
     call extend(contextWindow, deepcopy(s:ContextWindow, 1), "force")
-    let contextWindow.contextItemList = s:ContextWindow.__fileterVisibleItems(a:contextWindowBuilder.__contextItemList, s:VMenuManager.getGlobalStautus())
+    let contextWindow.contextItemList = s:ContextWindow.__fileterVisibleItems(a:contextWindowBuilder.__contextItemList, a:contextWindowBuilder.__globalStatusSupplier())
     let contextWindow.contextItemList = s:ItemParser.__fillNameToSameLength(contextWindow.contextItemList)
     let contextWindow.contextItemList = s:ItemParser.__concatenateShortKey(contextWindow.contextItemList)
     let contextWindow.contextItemList = s:ItemParser.__fillNameToSameLength(contextWindow.contextItemList)
@@ -329,6 +334,7 @@ function! s:ContextWindow.new(contextWindowBuilder)
     let contextWindow.__subContextWindowOpen = 0
     let contextWindow.__traceId = a:contextWindowBuilder.__traceId
     let contextWindow.__errConsumer = a:contextWindowBuilder.__errConsumer
+    let contextWindow.__globalStatusSupplier = a:contextWindowBuilder.__globalStatusSupplier
     let contextWindow.__executor = a:contextWindowBuilder.__executor
     let contextWindow.isOpen = 0
     let contextWindow.parentVmenuWindow = a:contextWindowBuilder.__parentContextWindow
@@ -460,7 +466,7 @@ function! s:ContextWindow.focusBottom()
     call self.focusItemByIndex(len(self.contextItemList)-1)
 endfunction
 function! s:ContextWindow.canBeFocused(idx)
-    return self.contextItemList[a:idx].isSep == 0 && self.contextItemList[a:idx].isInactive(s:VMenuManager.getGlobalStautus()) == 0
+    return self.contextItemList[a:idx].isSep == 0 && self.contextItemList[a:idx].isInactive(self.__globalStatusSupplier()) == 0
 endfunction
 
 function! s:ContextWindow.enter()
@@ -482,6 +488,7 @@ function! s:ContextWindow.__expand()
                 \.contextItemList(subItemList)
                 \.parentVmenuWindow(self)
                 \.delay(self.__delayTime)
+                \.globalStatusSupplier(self.__globalStatusSupplier)
                 \.build()
     let x = self.x + self.winWidth
     let y = self.y + self.__curItemIndex
@@ -513,7 +520,7 @@ function! s:ContextWindow.__renderHighlight(offset)
         " inactive item
         let curItem = self.contextItemList[index]
         let curItem.syntaxRegionList = []
-        if curItem.isInactive(s:VMenuManager.getGlobalStautus()) == 1
+        if curItem.isInactive(self.__globalStatusSupplier()) == 1
             if curItem.hotKeyPos == -1
                 call add(curItem.syntaxRegionList, ["VmenuInactive", 0, index, win.opts.w, index])
             else
@@ -820,8 +827,14 @@ endfunction
 "-------------------------------------------------------------------------------
 let s:GlobalStautus = {}
 " WARNNING: There are some bugs in detecting visual mode, so it is not recomended to use currently.
-let s:GlobalStautus.currentMode = ''
-let s:GlobalStautus.currentFileType = ''
+function! s:getGlobalStatus()
+    let globalStatus = deepcopy(s:GlobalStautus, 1)
+    let globalStatus.currentMode = mode()
+    let globalStatus.currentFileType = &ft
+    "TODO: only execute when needed
+    "let s:GlobalStautus.selectedText = s:getSelectedText()
+    return globalStatus
+endfunction
 
 
 "-------------------------------------------------------------------------------
@@ -896,14 +909,6 @@ function! s:getSelectedText()
     call execute('norm gv"zy')
     let selectedText = getreg('z')
     call setreg('z', origin)
-endfunction
-" TODO: complete this
-function! s:VMenuManager.getGlobalStautus()
-    let s:GlobalStautus.currentMode = mode()
-    let s:GlobalStautus.currentFileType = &ft
-    "TODO: only execute when needed
-    "let s:GlobalStautus.selectedText = s:getSelectedText()
-    return s:GlobalStautus
 endfunction
 
 
@@ -1126,10 +1131,17 @@ endfunction
 " API
 "-------------------------------------------------------------------------------
 " content: parsed context item list
+" opts.curMode: the mode string when calling this function.
 function! vmenu#openContextWindow(content, opts)
-    call s:ContextWindow.builder()
+    let contextWindowBuilder = s:ContextWindow.builder()
                 \.contextItemList(a:content)
-                \.build()
+    if get(a:opts, 'curMode', '') != ''
+        let globalStatus = s:getGlobalStatus()
+        let globalStatus.currentMode = a:opts.curMode
+        let contextWindowBuilder = contextWindowBuilder.globalStatusSupplier({ -> globalStatus})
+    endif
+
+    call contextWindowBuilder.build()
                 \.showAtCursor()
     call s:VMenuManager.startGettingUserInput()
 endfunction
@@ -1486,7 +1498,7 @@ if 0
 
     " show-ft test
     if 1
-        call assert_equal('n', s:VMenuManager.getGlobalStautus().currentMode)
+        call assert_equal('n', s:getGlobalStatus().currentMode)
         call s:ContextWindow.builder()
                     \.contextItemList(s:VMenuManager.parseContextItem([
                     \#{name: 'inactive in vim file', cmd: 'echo 1', tip: 'tip', icon: '', show-ft: ['vim']}
@@ -1935,6 +1947,45 @@ if 0
         call assert_equal("Test-empty-sub-menu", s:VMenuManager.__focusedWindow.__curItem.name->trim())
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
         call assert_equal(0, s:VMenuManager.__focusedWindow.isOpen)
+    endif
+
+    " globalStatusSupplier test
+    if 1
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: 'name', cmd: ''},
+                    \#{name: 'name2', cmd: '', show-mode: ['n']},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.globalStatusSupplier({ -> #{currentMode: 'v' } })
+                    \.minWidth(10)
+                    \.build()
+                    \.showAtCursor()
+        call assert_equal(1, s:VMenuManager.__focusedWindow.contextItemList->len())
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: 'name', cmd: '', show-mode: ['v']},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.globalStatusSupplier({ -> #{currentMode: 'v' } })
+                    \.minWidth(10)
+                    \.build()
+                    \.showAtCursor()
+        call assert_equal(1, s:VMenuManager.__focusedWindow.contextItemList->len())
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: '1', cmd: '', subItemList: [#{name: '2', cmd: '', show-mode: ['v']}]},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.globalStatusSupplier({ -> #{currentMode: 'v' } })
+                    \.minWidth(10)
+                    \.build()
+                    \.showAtCursor()
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<CR>"))
+        call assert_equal(1, s:VMenuManager.__focusedWindow.contextItemList->len())
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
     call s:showErrors()

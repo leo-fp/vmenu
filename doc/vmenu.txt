@@ -51,8 +51,18 @@ Packer.nvim >
 Open context window.
 
 content: parsed context item list. can be create by 'vmenu#parse_context'
-opts: keep as a parameter compatible with vim-quickui. It is not in using
-currently.
+opts: dict type.
+opts.curMode: the mode string when opening the context window. using ':h mode()'
+              to see available values. if definded, 's:GlobalStautus.currentMode'
+              will be corrected to what you set.
+              this is useful in such scenario. >
+
+    let content = vmenu#parse_context([
+                \#{name: 'normal mode only item', cmd: '', show-mode: ["n"]},
+                \#{name: 'visual mode only item', cmd: '', show-mode: ["v"]}
+                \], g:VMENU#ITEM_VERSION.VMENU)
+    vmap <leader>q :call vmenu#openContextWindow(content, #{curMode: 'v'})<CR>
+    nmap <leader>q :call vmenu#openContextWindow(content, {})<CR>
 
 3.2 vmenu#installTopMenu(name, userTopMenu)				*vmenu#installTopMenu()*
 -------------------------
@@ -116,20 +126,22 @@ File type can be get by >
 4.2 show-mode                                                  *vmenu-show-mode*
 ----------------------------------------
 If you want vmenu item only appears in specific mode.
-WARNING: There are some bugs in detecting visual mode, so it is not recomended
-to use currently.
+the "curMode" is required.
 >
-    #{name: 'item name', cmd: '', show-mode: ["n"]}
+    call vmenu#openContextWindow(vmenu#parse_context([
+                \#{name: 'item name', cmd: '', show-mode: ["v"]},
+                \], g:VMENU#ITEM_VERSION.VMENU), #{curMode: 'v'})
 
 You can pass different context menu as altarnative approach.
 
 4.3 deactive-mode                                          *vmenu-deactive-mode*
 ----------------------------------------
 If you want vmenu item be seeable but not executable in specific mode.
-WARNING: There are some bugs in detecting visual mode, so it is not recomended
-to use currently.
+the "curMode" is required.
 >
-    #{name: 'item name', cmd: '', deactive-mode: ["n"]}
+    call vmenu#openContextWindow(vmenu#parse_context([
+                \#{name: 'item name', cmd: '', deactive-mode: ["v"]},
+                \], g:VMENU#ITEM_VERSION.VMENU), #{curMode: 'v'})
 
 You can pass different context menu as altarnative approach.
 
