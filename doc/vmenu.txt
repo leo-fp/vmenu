@@ -12,6 +12,7 @@ Version:	0.2.0
     3.4 vmenu#itemTips().....................................|vmenu#itemTips()|
     3.5 vmenu#parse_context()...........................|vmenu#parse_context()|
     3.6 vmenu#existFileType()...........................|vmenu#existFileType()|
+    3.7 vmenu#matchRegex().................................|vmenu#matchRegex()|
 4. vmenu item field	.........................................|vmenu-item-field|
     4.1 show-ft.......................................................|show-ft|
     4.2 show-mode...................................................|show-mode|
@@ -110,6 +111,18 @@ return: 1: exist. 0: not exist
 
 NOTE: If the <ft> you want to detect is only opened in other tab, this will
 return 0.
+
+3.7 vmenu#matchRegex(regex)                                 *vmenu#matchRegex()*
+----------------------------------------
+Check if selected text matches the regex. only used in visual mode.
+Designed to work with show-if or deactive-if.
+
+If you want vmenu item only appears when selected text matches the regex.
+>
+    #{name: 'name', cmd: '', show-if: vmenu#matchRegex("your regex")}
+
+regex: regex string.
+return: 1: match. 0: not match
 
 ==============================================================================
 4. vmenu item field						                      *vmenu-item-field*

@@ -285,11 +285,15 @@ function! s:ContextWindowBuilder.new()
     let contextWindowBuilder.__closeKey = "\<ESC>"
     let contextWindowBuilder.__confirmKey = "\<CR>"
     let contextWindowBuilder.__goBottomKey = 'G'
-    let contextWindowBuilder.__executor = { callbackItemParam -> execute(callbackItemParam.cmd) }
+    let contextWindowBuilder.__executor = { callbackItemParam, globalStatus -> execute(callbackItemParam.cmd) }
     return contextWindowBuilder
 endfunction
 function! s:ContextWindowBuilder.contextItemList(contextItemList)
     let self.__contextItemList = a:contextItemList
+    return self
+endfunction
+function! s:ContextWindowBuilder.executor(executor)
+    let self.__executor = a:executor
     return self
 endfunction
 function! s:ContextWindowBuilder.build()
@@ -505,7 +509,7 @@ function! s:ContextWindow.__execute()
     if strcharlen(curItem.cmd) > 0
         call self.close(s:CASCADE_CLOSE)
 
-        call self.__executor(s:CallbackItemParam.new(curItem))
+        call self.__executor(s:CallbackItemParam.new(curItem), self.__globalStatusSupplier())
         call self.__logger.info(printf("winId: %s, execute cmd: %s", self.winId, curItem.cmd))
     endif
 endfunction
@@ -826,13 +830,12 @@ endfunction
 " class GlobalStautus
 "-------------------------------------------------------------------------------
 let s:GlobalStautus = {}
-" WARNNING: There are some bugs in detecting visual mode, so it is not recomended to use currently.
-function! s:getGlobalStatus()
+function! s:getGlobalStatus(curMode="n")
     let globalStatus = deepcopy(s:GlobalStautus, 1)
-    let globalStatus.currentMode = mode()
+    let globalStatus.currentMode = a:curMode
     let globalStatus.currentFileType = &ft
-    "TODO: only execute when needed
-    "let s:GlobalStautus.selectedText = s:getSelectedText()
+    " get selected text will move the cursor to the last visual area, so only get selected text in visual mode.
+    let globalStatus.selectedText = a:curMode[0:1] ==? "v" ? s:getSelectedText() : ""
     return globalStatus
 endfunction
 
@@ -909,6 +912,7 @@ function! s:getSelectedText()
     call execute('norm gv"zy')
     let selectedText = getreg('z')
     call setreg('z', origin)
+    return selectedText
 endfunction
 
 
@@ -1135,10 +1139,9 @@ endfunction
 function! vmenu#openContextWindow(content, opts)
     let contextWindowBuilder = s:ContextWindow.builder()
                 \.contextItemList(a:content)
+    echom a:opts
     if get(a:opts, 'curMode', '') != ''
-        let globalStatus = s:getGlobalStatus()
-        let globalStatus.currentMode = a:opts.curMode
-        let contextWindowBuilder = contextWindowBuilder.globalStatusSupplier({ -> globalStatus})
+        let contextWindowBuilder = contextWindowBuilder.globalStatusSupplier({ -> s:getGlobalStatus(a:opts.curMode) })
     endif
 
     try
@@ -1186,6 +1189,10 @@ endfunction
 
 function! vmenu#existFileType(ft)
     return { globalStatus -> s:existFileType(a:ft) }
+endfunction
+
+function! vmenu#matchRegex(regex)
+    return { globalStatus -> match(globalStatus.selectedText, a:regex) != -1 }
 endfunction
 
 
@@ -1990,6 +1997,25 @@ if 0
         call assert_equal(1, s:VMenuManager.__focusedWindow.contextItemList->len())
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+    endif
+
+    " vmenu#matchRegex test
+    if 1
+        let s:errorList = []
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: '1', cmd: '', show-if: vmenu#matchRegex("hello") },
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.globalStatusSupplier({ -> #{currentMode: 'v', selectedText: "hello" } })
+                    \.build()
+                    \.showAtCursor()
+        call assert_equal("1", s:VMenuManager.__focusedWindow.__curItem.name->trim())
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+    endif
+
+    " do not get selected text in normal mode
+    if 1
+        call assert_equal("", s:getGlobalStatus().selectedText)
     endif
 
     call s:showErrors()
