@@ -1139,7 +1139,6 @@ endfunction
 function! vmenu#openContextWindow(content, opts)
     let contextWindowBuilder = s:ContextWindow.builder()
                 \.contextItemList(a:content)
-    echom a:opts
     if get(a:opts, 'curMode', '') != ''
         let contextWindowBuilder = contextWindowBuilder.globalStatusSupplier({ -> s:getGlobalStatus(a:opts.curMode) })
     endif
