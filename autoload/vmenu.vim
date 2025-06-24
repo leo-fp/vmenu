@@ -1206,12 +1206,12 @@ function! s:Log.new(vmenuWindow)
 endfunction
 function! s:Log.info(msg)
     if s:enable_log == 1
-        echom printf("TRACEID:[%s] %s", self.vmenuWindow.__traceId, a:msg)
+        call s:echom(printf("TRACEID:[%s] %s", self.vmenuWindow.__traceId, a:msg))
     endif
 endfunction
 function! s:Log.simpleLog(msg)
     if s:enable_log == 1
-        echom a:msg
+        call s:echom(a:msg)
     endif
 endfunction
 
@@ -1220,6 +1220,9 @@ endfunction
 "-------------------------------------------------------------------------------
 function! s:printWarn(msg)
     echohl WarningMsg | echo a:msg | echohl None
+endfunction
+
+function! s:echom(msg)
     echom a:msg
 endfunction
 
@@ -1276,7 +1279,9 @@ function! s:showErrors()
     call win.close()
 endfunction
 
+" <TEST-FLAG>
 if 0
+
     let v:errors = []
     let s:enable_log = 0
 
