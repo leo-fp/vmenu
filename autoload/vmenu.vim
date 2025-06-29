@@ -2127,7 +2127,6 @@ if 0
                     \], g:VMENU#ITEM_VERSION.VMENU))
                     \.build()
                     \.showAtCursor()
-        echom s:VMenuManager.__focusedWindow.contextItemList
         call assert_equal(2, s:VMenuManager.__focusedWindow.contextItemList->len())
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
 
@@ -2140,7 +2139,6 @@ if 0
                     \], g:VMENU#ITEM_VERSION.VMENU))
                     \.build()
                     \.showAtCursor()
-        echom s:VMenuManager.__focusedWindow.contextItemList[1]
         call assert_equal(6, s:VMenuManager.__focusedWindow.contextItemList->len())
         call assert_equal(1, s:VMenuManager.__focusedWindow.contextItemList[1].isSep)
         call assert_equal(1, s:VMenuManager.__focusedWindow.contextItemList[4].isSep)
