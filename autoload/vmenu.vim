@@ -312,6 +312,7 @@ function! s:ContextWindow.new(contextWindowBuilder)
     let contextWindow = s:VmenuWindow.new()
     call extend(contextWindow, deepcopy(s:ContextWindow, 1), "force")
     let contextWindow.contextItemList = s:ContextWindow.__fileterVisibleItems(a:contextWindowBuilder.__contextItemList, a:contextWindowBuilder.__globalStatusSupplier())
+    let contextWindow.contextItemList = s:ItemParser.__addSurroundedSeparatorLine(contextWindow.contextItemList)
     let contextWindow.contextItemList = s:ItemParser.__fillNameToSameLength(contextWindow.contextItemList)
     let contextWindow.contextItemList = s:ItemParser.__concatenateShortKey(contextWindow.contextItemList)
     let contextWindow.contextItemList = s:ItemParser.__fillNameToSameLength(contextWindow.contextItemList)
@@ -596,6 +597,7 @@ function! s:ContextItem.new(dict)
     let contextItem.stretchingIndex = -1    " the index for stretching. used for minWidth
     let contextItem.syntaxRegionList       = [] " [[highlight, start column number (inclusive), start line number, end column number(exclusive), end line number]]
     let contextItem.itemVersion     = get(a:dict, 'itemVersion', 0)  " context item version. see: g:VMENU#ITEM_VERSION
+    let contextItem.group           = get(a:dict, 'group', '')  " group name of current item
     return contextItem
 endfunction
 
@@ -931,6 +933,7 @@ function! s:ItemParser.parseVMenuItem(userItem)
     let tip       = get(a:userItem, 'tip', '')
     let icon      = get(a:userItem, 'icon', '')
     let shortKey  = get(a:userItem, 'shortKey', '')
+    let group  = get(a:userItem, 'group', '')
     let subItemList = []
     if (has_key(a:userItem, 'subItemList'))
         for item in get(a:userItem, 'subItemList')
@@ -972,7 +975,8 @@ function! s:ItemParser.parseVMenuItem(userItem)
                 \isInactive: DeactivePredicate,
                 \subItemList: subItemList,
                 \isSep: isSep,
-                \itemVersion: g:VMENU#ITEM_VERSION.VMENU
+                \itemVersion: g:VMENU#ITEM_VERSION.VMENU,
+                \group: group
                 \})
 endfunction
 function! s:ItemParser.parseQuickuiItem(quickuiItem)
@@ -1105,6 +1109,60 @@ function! s:ItemParser.__renderSeparatorLine(contextItemList)
             let contextItem.name = ' ' .. repeat('—', max([1, width-2])) .. ' '
         endif
     endfor
+    return workingContextItemList
+endfunction
+function! s:ItemParser.__addSurroundedSeparatorLine(contextItemList)
+    " place items with same group next to each other
+    let sortedItemList = []
+    let groupSet = []
+    for item in a:contextItemList
+        " do not handle default group
+        if item.group == ''
+            continue
+        endif
+
+        let idx = indexof(groupSet, {i, v -> v.groupName == item.group})
+        if idx == -1
+            call add(groupSet, #{groupName: item.group, items: [item]})
+        else
+            call add(groupSet[idx].items, item)
+        endif
+    endfor
+
+    for item in a:contextItemList
+        if item.group == ''
+            call add(sortedItemList, deepcopy(item, 1))
+        else
+            let idx = indexof(groupSet, {i, v -> v.groupName == item.group})
+            if idx != -1
+                call extend(sortedItemList, groupSet[idx].items)
+                call remove(groupSet, idx)
+            endif
+        endif
+    endfor
+
+    let workingContextItemList = []
+    for idx in range(sortedItemList->len())
+        if (sortedItemList[idx].group != '')
+            if idx == 0 || sortedItemList[idx-1].isSep == 1
+                        \ || sortedItemList[idx-1].group == sortedItemList[idx].group
+                        \ || workingContextItemList[workingContextItemList->len()-1].isSep == 1
+            else
+                call add(workingContextItemList, self.parseVMenuItem(#{isSep: 1}))
+            endif
+
+            call add(workingContextItemList, deepcopy(sortedItemList[idx], 1))
+
+            if idx == sortedItemList->len()-1 || sortedItemList[idx+1].isSep == 1
+                        \ || sortedItemList[idx+1].group == sortedItemList[idx].group
+            else
+                call add(workingContextItemList, self.parseVMenuItem(#{isSep: 1}))
+            endif
+        else
+            call add(workingContextItemList, deepcopy(sortedItemList[idx], 1))
+        endif
+    endfor
+
     return workingContextItemList
 endfunction
 
@@ -2020,6 +2078,119 @@ if 0
     " do not get selected text in normal mode
     if 1
         call assert_equal("", s:getGlobalStatus().selectedText)
+    endif
+
+    " group test
+    if 1
+        let s:errorList = []
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: '1', cmd: '' },
+                    \#{name: '1', cmd: '', group: "g1" },
+                    \#{name: '1', cmd: '' },
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.build()
+                    \.showAtCursor()
+        call assert_equal(5, s:VMenuManager.__focusedWindow.contextItemList->len())
+        call assert_equal(1, s:VMenuManager.__focusedWindow.contextItemList[1].isSep)
+        call assert_equal(1, s:VMenuManager.__focusedWindow.contextItemList[3].isSep)
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: '1', cmd: '', group: "g1" },
+                    \#{name: '1', cmd: '' },
+                    \#{name: '1', cmd: '' },
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.build()
+                    \.showAtCursor()
+        call assert_equal(4, s:VMenuManager.__focusedWindow.contextItemList->len())
+        call assert_equal(1, s:VMenuManager.__focusedWindow.contextItemList[1].isSep)
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: '1', cmd: '' },
+                    \#{name: '1', cmd: '' },
+                    \#{name: '1', cmd: '', group: "g1" },
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.build()
+                    \.showAtCursor()
+        call assert_equal(4, s:VMenuManager.__focusedWindow.contextItemList->len())
+        call assert_equal(1, s:VMenuManager.__focusedWindow.contextItemList[2].isSep)
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: '1', cmd: '', group: "g1" },
+                    \#{name: '1', cmd: '', group: "g1" },
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.build()
+                    \.showAtCursor()
+        echom s:VMenuManager.__focusedWindow.contextItemList
+        call assert_equal(2, s:VMenuManager.__focusedWindow.contextItemList->len())
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: '1', cmd: '' },
+                    \#{name: '1', cmd: '', group: "g1" },
+                    \#{name: '1', cmd: '', group: "g1" },
+                    \#{name: '1', cmd: '' },
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.build()
+                    \.showAtCursor()
+        echom s:VMenuManager.__focusedWindow.contextItemList[1]
+        call assert_equal(6, s:VMenuManager.__focusedWindow.contextItemList->len())
+        call assert_equal(1, s:VMenuManager.__focusedWindow.contextItemList[1].isSep)
+        call assert_equal(1, s:VMenuManager.__focusedWindow.contextItemList[4].isSep)
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{isSep: 1},
+                    \#{name: '1', cmd: '', group: "g1" },
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.build()
+                    \.showAtCursor()
+        call assert_equal(2, s:VMenuManager.__focusedWindow.contextItemList->len())
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: '1', cmd: '', group: "g1" },
+                    \#{isSep: 1},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.build()
+                    \.showAtCursor()
+        call assert_equal(2, s:VMenuManager.__focusedWindow.contextItemList->len())
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: '1', cmd: '', group: "g1" },
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.build()
+                    \.showAtCursor()
+        call assert_equal(1, s:VMenuManager.__focusedWindow.contextItemList->len())
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: '1', cmd: ''},
+                    \#{name: '2', cmd: '', group: "g1" },
+                    \#{name: '3', cmd: '', group: "g2" },
+                    \#{name: '4', cmd: '', group: "g1" },
+                    \#{name: '5', cmd: '', group: "g2" },
+                    \#{name: '6', cmd: ''},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.build()
+                    \.showAtCursor()
+        call assert_equal(9, s:VMenuManager.__focusedWindow.contextItemList->len())
+        call assert_equal(1, s:VMenuManager.__focusedWindow.contextItemList[1].isSep)
+        call assert_equal(1, s:VMenuManager.__focusedWindow.contextItemList[4].isSep)
+        call assert_equal("4", s:VMenuManager.__focusedWindow.contextItemList[3].name->trim())
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
     call s:showErrors()
