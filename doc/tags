@@ -1,6 +1,8 @@
 show-ft	vmenu.txt	/*show-ft*
+vmenu#existFileType()	vmenu.txt	/*vmenu#existFileType()*
 vmenu#installTopMenu()	vmenu.txt	/*vmenu#installTopMenu()*
 vmenu#itemTips()	vmenu.txt	/*vmenu#itemTips()*
+vmenu#matchRegex()	vmenu.txt	/*vmenu#matchRegex()*
 vmenu#openContextWindow()	vmenu.txt	/*vmenu#openContextWindow()*
 vmenu#openTopMenu()	vmenu.txt	/*vmenu#openTopMenu()*
 vmenu#parse_context()	vmenu.txt	/*vmenu#parse_context()*
@@ -10,6 +12,7 @@ vmenu-cmd	vmenu.txt	/*vmenu-cmd*
 vmenu-deactive-if	vmenu.txt	/*vmenu-deactive-if*
 vmenu-deactive-mode	vmenu.txt	/*vmenu-deactive-mode*
 vmenu-global-variables	vmenu.txt	/*vmenu-global-variables*
+vmenu-group	vmenu.txt	/*vmenu-group*
 vmenu-icon	vmenu.txt	/*vmenu-icon*
 vmenu-installation	vmenu.txt	/*vmenu-installation*
 vmenu-intro	vmenu.txt	/*vmenu-intro*
