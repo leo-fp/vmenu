@@ -24,6 +24,7 @@ Version:	0.2.0
     4.8 tip...............................................................|tip|
     4.9 icon.............................................................|icon|
     4.10 subItemList..............................................|subItemList|
+    4.11 group..........................................................|group|
 5. vmenu Tips and Tricks...........................................|vmenu-tips|
 6. global variables....................................|vmenu-global-variables|
     6.1 g:vmenu_enable_log.............................|vmenu-vmenu_enable_log|
@@ -222,6 +223,15 @@ item.
 Example:
 >
     #{name: 'name', cmd: 'echo 1', subItemList: [#{name: 'sub name', cmd: 'echo 1.1'}]},
+
+
+4.11 group                                                         *vmenu-group*
+----------------------------------------
+Group string. different group will be separated by separator line
+
+Example:
+>
+    #{name: 'name', cmd: 'echo 1', group: "group_1"},
 
 ==============================================================================
 5. vmenu Tips and Tricks						                    *vmenu-tips*
