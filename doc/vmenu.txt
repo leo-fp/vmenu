@@ -55,7 +55,7 @@ Open context window.
 content: parsed context item list. can be create by 'vmenu#parse_context'
 opts: dict type.
 opts.curMode: the mode string when opening the context window. using ':h mode()'
-              to see available values. if definded, 's:GlobalStautus.currentMode'
+              to see available values. if definded, 's:EditorStatus.currentMode'
               will be corrected to what you set.
               this is useful in such scenario. >
 
@@ -165,7 +165,7 @@ You can define a function to control whether to show a item.
 The function receives a dict that contains some status of editor when you open
 a vmenu window and return 0 -> do not show, 1 -> show.
 
-To see structure of the dict, check s:GlobalStautus in code.
+To see structure of the dict, check s:EditorStatus in code.
 
 
 4.5 deactive-if                                              *vmenu-deactive-if*
@@ -174,7 +174,7 @@ You can define a function to control whether to deactive a item.
 The function receives a dict that contains some status of editor when you open
 a vmenu window and return 0 -> do not deactive, 1 -> deactive.
 
-To see structure of the dict, check s:GlobalStautus in code.
+To see structure of the dict, check s:EditorStatus in code.
 
 
 4.6 name                                                            *vmenu-name*

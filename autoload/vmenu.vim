@@ -97,7 +97,7 @@ function! s:VmenuWindowBuilder.new()
     let vmenuWindowBuilder.__traceId             = ''   " a text that will be printed in log. for debug
     let vmenuWindowBuilder.__errConsumer = function("s:printWarn")
     let vmenuWindowBuilder.__minWidth = 0   " minimal window width. only supported in context menu
-    let vmenuWindowBuilder.__globalStatusSupplier = function("s:getGlobalStatus")
+    let vmenuWindowBuilder.__editorStatusSupplier = function("s:getEditorStatus")
     return vmenuWindowBuilder
 endfunction
 function! s:VmenuWindowBuilder.delay(seconds)
@@ -136,8 +136,8 @@ function! s:VmenuWindowBuilder.minWidth(width)
     let self.__minWidth = a:width
     return self
 endfunction
-function! s:VmenuWindowBuilder.globalStatusSupplier(globalStatusSupplier)
-    let self.__globalStatusSupplier = a:globalStatusSupplier
+function! s:VmenuWindowBuilder.editorStatusSupplier(editorStatusSupplier)
+    let self.__editorStatusSupplier = a:editorStatusSupplier
     return self
 endfunction
 function! s:VmenuWindowBuilder.build()
@@ -285,7 +285,7 @@ function! s:ContextWindowBuilder.new()
     let contextWindowBuilder.__closeKey = "\<ESC>"
     let contextWindowBuilder.__confirmKey = "\<CR>"
     let contextWindowBuilder.__goBottomKey = 'G'
-    let contextWindowBuilder.__executor = { callbackItemParam, globalStatus -> execute(callbackItemParam.cmd) }
+    let contextWindowBuilder.__executor = { callbackItemParam, editorStatus -> execute(callbackItemParam.cmd) }
     return contextWindowBuilder
 endfunction
 function! s:ContextWindowBuilder.contextItemList(contextItemList)
@@ -311,7 +311,7 @@ endfunction
 function! s:ContextWindow.new(contextWindowBuilder)
     let contextWindow = s:VmenuWindow.new()
     call extend(contextWindow, deepcopy(s:ContextWindow, 1), "force")
-    let contextWindow.contextItemList = s:ContextWindow.__fileterVisibleItems(a:contextWindowBuilder.__contextItemList, a:contextWindowBuilder.__globalStatusSupplier())
+    let contextWindow.contextItemList = s:ContextWindow.__fileterVisibleItems(a:contextWindowBuilder.__contextItemList, a:contextWindowBuilder.__editorStatusSupplier())
     let contextWindow.contextItemList = s:ItemParser.__addSurroundedSeparatorLine(contextWindow.contextItemList)
     let contextWindow.contextItemList = s:ItemParser.__fillNameToSameLength(contextWindow.contextItemList)
     let contextWindow.contextItemList = s:ItemParser.__concatenateShortKey(contextWindow.contextItemList)
@@ -339,7 +339,7 @@ function! s:ContextWindow.new(contextWindowBuilder)
     let contextWindow.__subContextWindowOpen = 0
     let contextWindow.__traceId = a:contextWindowBuilder.__traceId
     let contextWindow.__errConsumer = a:contextWindowBuilder.__errConsumer
-    let contextWindow.__globalStatusSupplier = a:contextWindowBuilder.__globalStatusSupplier
+    let contextWindow.__editorStatusSupplier = a:contextWindowBuilder.__editorStatusSupplier
     let contextWindow.__executor = a:contextWindowBuilder.__executor
     let contextWindow.isOpen = 0
     let contextWindow.parentVmenuWindow = a:contextWindowBuilder.__parentContextWindow
@@ -359,12 +359,12 @@ function! s:ContextWindow.new(contextWindowBuilder)
     let contextWindow.__actionMap = actionMap
     return contextWindow
 endfunction
-" globalStatus: class GlobalStautus
-function! s:ContextWindow.__fileterVisibleItems(itemList, globalStatus)
+" editorStatus: class EditorStautus
+function! s:ContextWindow.__fileterVisibleItems(itemList, editorStatus)
     let activeItems = []
 
     for contextItem in a:itemList
-        if get(contextItem, 'isVisible')(a:globalStatus) == 1
+        if get(contextItem, 'isVisible')(a:editorStatus) == 1
             call add(activeItems, deepcopy(contextItem, 1))
         endif
     endfor
@@ -471,7 +471,7 @@ function! s:ContextWindow.focusBottom()
     call self.focusItemByIndex(len(self.contextItemList)-1)
 endfunction
 function! s:ContextWindow.canBeFocused(idx)
-    return self.contextItemList[a:idx].isSep == 0 && self.contextItemList[a:idx].isInactive(self.__globalStatusSupplier()) == 0
+    return self.contextItemList[a:idx].isSep == 0 && self.contextItemList[a:idx].isInactive(self.__editorStatusSupplier()) == 0
 endfunction
 
 function! s:ContextWindow.enter()
@@ -493,7 +493,7 @@ function! s:ContextWindow.__expand()
                 \.contextItemList(subItemList)
                 \.parentVmenuWindow(self)
                 \.delay(self.__delayTime)
-                \.globalStatusSupplier(self.__globalStatusSupplier)
+                \.editorStatusSupplier(self.__editorStatusSupplier)
                 \.build()
     let x = self.x + self.winWidth
     let y = self.y + self.__curItemIndex
@@ -510,7 +510,7 @@ function! s:ContextWindow.__execute()
     if strcharlen(curItem.cmd) > 0
         call self.close(s:CASCADE_CLOSE)
 
-        call self.__executor(s:CallbackItemParam.new(curItem), self.__globalStatusSupplier())
+        call self.__executor(s:CallbackItemParam.new(curItem), self.__editorStatusSupplier())
         call self.__logger.info(printf("winId: %s, execute cmd: %s", self.winId, curItem.cmd))
     endif
 endfunction
@@ -525,7 +525,7 @@ function! s:ContextWindow.__renderHighlight(offset)
         " inactive item
         let curItem = self.contextItemList[index]
         let curItem.syntaxRegionList = []
-        if curItem.isInactive(self.__globalStatusSupplier()) == 1
+        if curItem.isInactive(self.__editorStatusSupplier()) == 1
             if curItem.hotKeyPos == -1
                 call add(curItem.syntaxRegionList, ["VmenuInactive", 0, index, win.opts.w, index])
             else
@@ -588,8 +588,8 @@ function! s:ContextItem.new(dict)
     let contextItem.name            = get(a:dict, 'name', '')
     let contextItem.hotKey          = get(a:dict, 'hotKey', '')
     let contextItem.hotKeyPos       = get(a:dict, 'hotKeyPos', -1)   " hotkey position
-    let contextItem.isVisible  = get(a:dict, 'isVisible')            " GlobalStautus class -> 0/1
-    let contextItem.isInactive = get(a:dict, 'isInactive')           " GlobalStautus class -> 0/1
+    let contextItem.isVisible  = get(a:dict, 'isVisible')            " EditorStatus class -> 0/1
+    let contextItem.isInactive = get(a:dict, 'isInactive')           " EditorStatus class -> 0/1
     let contextItem.subItemList     = get(a:dict, 'subItemList', []) " ContextItem list
     let contextItem.isSep           = get(a:dict, 'isSep', 0)        " is seperator line. 0: false, 1: true
     let contextItem.descPos         = get(a:dict, 'descPos', -1)     " offset of shortKey
@@ -829,16 +829,16 @@ endfunction
 
 
 "-------------------------------------------------------------------------------
-" class GlobalStautus
+" class EditorStatus
 "-------------------------------------------------------------------------------
-let s:GlobalStautus = {}
-function! s:getGlobalStatus(curMode="n")
-    let globalStatus = deepcopy(s:GlobalStautus, 1)
-    let globalStatus.currentMode = a:curMode
-    let globalStatus.currentFileType = &ft
+let s:EditorStatus = {}
+function! s:getEditorStatus(curMode="n")
+    let editorStatus = deepcopy(s:EditorStatus, 1)
+    let editorStatus.currentMode = a:curMode
+    let editorStatus.currentFileType = &ft
     " get selected text will move the cursor to the last visual area, so only get selected text in visual mode.
-    let globalStatus.selectedText = a:curMode[0:1] ==? "v" ? s:getSelectedText() : ""
-    return globalStatus
+    let editorStatus.selectedText = a:curMode[0:1] ==? "v" ? s:getSelectedText() : ""
+    return editorStatus
 endfunction
 
 
@@ -1173,18 +1173,18 @@ function! s:extractSubMenuOfExpand(callId, quickuiItem)
 endfunction
 
 function! s:createModePredicate(modes)
-    return { globalStatus -> index(a:modes, globalStatus['currentMode']) != -1}
+    return { editorStatus -> index(a:modes, editorStatus['currentMode']) != -1}
 endfunction
 
 function! s:createFileTypePredicate(fileTypes)
-    return { globalStatus -> index(a:fileTypes, globalStatus['currentFileType']) != -1}
+    return { editorStatus -> index(a:fileTypes, editorStatus['currentFileType']) != -1}
 endfunction
 
-function! s:alwaysFalsePredicate(globalStatus)
+function! s:alwaysFalsePredicate(editorStatus)
     return 0
 endfunction
 
-function! s:alwaysTruePredicate(globalStatus)
+function! s:alwaysTruePredicate(editorStatus)
     return 1
 endfunction
 
@@ -1198,7 +1198,7 @@ function! vmenu#openContextWindow(content, opts)
     let contextWindowBuilder = s:ContextWindow.builder()
                 \.contextItemList(a:content)
     if get(a:opts, 'curMode', '') != ''
-        let contextWindowBuilder = contextWindowBuilder.globalStatusSupplier({ -> s:getGlobalStatus(a:opts.curMode) })
+        let contextWindowBuilder = contextWindowBuilder.editorStatusSupplier({ -> s:getEditorStatus(a:opts.curMode) })
     endif
 
     try
@@ -1245,11 +1245,11 @@ function! vmenu#itemTips()
 endfunction
 
 function! vmenu#existFileType(ft)
-    return { globalStatus -> s:existFileType(a:ft) }
+    return { editorStatus -> s:existFileType(a:ft) }
 endfunction
 
 function! vmenu#matchRegex(regex)
-    return { globalStatus -> match(globalStatus.selectedText, a:regex) != -1 }
+    return { editorStatus -> match(editorStatus.selectedText, a:regex) != -1 }
 endfunction
 
 
@@ -1571,7 +1571,7 @@ if 0
 
     " show-ft test
     if 1
-        call assert_equal('n', s:getGlobalStatus().currentMode)
+        call assert_equal('n', s:getEditorStatus().currentMode)
         call s:ContextWindow.builder()
                     \.contextItemList(s:VMenuManager.parseContextItem([
                     \#{name: 'inactive in vim file', cmd: 'echo 1', tip: 'tip', icon: '', show-ft: ['vim']}
@@ -2022,14 +2022,14 @@ if 0
         call assert_equal(0, s:VMenuManager.__focusedWindow.isOpen)
     endif
 
-    " globalStatusSupplier test
+    " editorStatusSupplier test
     if 1
         call s:ContextWindow.builder()
                     \.contextItemList(s:VMenuManager.parseContextItem([
                     \#{name: 'name', cmd: ''},
                     \#{name: 'name2', cmd: '', show-mode: ['n']},
                     \], g:VMENU#ITEM_VERSION.VMENU))
-                    \.globalStatusSupplier({ -> #{currentMode: 'v' } })
+                    \.editorStatusSupplier({ -> #{currentMode: 'v' } })
                     \.minWidth(10)
                     \.build()
                     \.showAtCursor()
@@ -2040,7 +2040,7 @@ if 0
                     \.contextItemList(s:VMenuManager.parseContextItem([
                     \#{name: 'name', cmd: '', show-mode: ['v']},
                     \], g:VMENU#ITEM_VERSION.VMENU))
-                    \.globalStatusSupplier({ -> #{currentMode: 'v' } })
+                    \.editorStatusSupplier({ -> #{currentMode: 'v' } })
                     \.minWidth(10)
                     \.build()
                     \.showAtCursor()
@@ -2051,7 +2051,7 @@ if 0
                     \.contextItemList(s:VMenuManager.parseContextItem([
                     \#{name: '1', cmd: '', subItemList: [#{name: '2', cmd: '', show-mode: ['v']}]},
                     \], g:VMENU#ITEM_VERSION.VMENU))
-                    \.globalStatusSupplier({ -> #{currentMode: 'v' } })
+                    \.editorStatusSupplier({ -> #{currentMode: 'v' } })
                     \.minWidth(10)
                     \.build()
                     \.showAtCursor()
@@ -2068,7 +2068,7 @@ if 0
                     \.contextItemList(s:VMenuManager.parseContextItem([
                     \#{name: '1', cmd: '', show-if: vmenu#matchRegex("hello") },
                     \], g:VMENU#ITEM_VERSION.VMENU))
-                    \.globalStatusSupplier({ -> #{currentMode: 'v', selectedText: "hello" } })
+                    \.editorStatusSupplier({ -> #{currentMode: 'v', selectedText: "hello" } })
                     \.build()
                     \.showAtCursor()
         call assert_equal("1", s:VMenuManager.__focusedWindow.__curItem.name->trim())
@@ -2077,7 +2077,7 @@ if 0
 
     " do not get selected text in normal mode
     if 1
-        call assert_equal("", s:getGlobalStatus().selectedText)
+        call assert_equal("", s:getEditorStatus().selectedText)
     endif
 
     " group test
