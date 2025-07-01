@@ -1837,7 +1837,6 @@ if 0
 
     " vmenu#existFileType test
     if 1
-        let s:errorList = []
         call s:ContextWindow.builder()
                     \.contextItemList(s:VMenuManager.parseContextItem([
                     \#{name: 'name', cmd: '', show-if: vmenu#existFileType("vim") },
@@ -2063,7 +2062,6 @@ if 0
 
     " vmenu#matchRegex test
     if 1
-        let s:errorList = []
         call s:ContextWindow.builder()
                     \.contextItemList(s:VMenuManager.parseContextItem([
                     \#{name: '1', cmd: '', show-if: vmenu#matchRegex("hello") },
@@ -2082,7 +2080,6 @@ if 0
 
     " group test
     if 1
-        let s:errorList = []
         call s:ContextWindow.builder()
                     \.contextItemList(s:VMenuManager.parseContextItem([
                     \#{name: '1', cmd: '' },
