@@ -50,7 +50,7 @@ endfunction
 " class CallbackItemParam
 "-------------------------------------------------------------------------------
 let s:CallbackItemParam = {}
-function! s:CallbackItemParam.new(contextItem)
+function! s:createCallbackItemParm(contextItem)
     let callbackItemParam = deepcopy(s:CallbackItemParam, 1)
     let callbackItemParam.cmd = a:contextItem.cmd
     return callbackItemParam
@@ -507,11 +507,17 @@ function! s:ContextWindow.__expand()
 endfunction
 function! s:ContextWindow.__execute()
     let curItem = self.contextItemList[self.__curItemIndex]
-    if strcharlen(curItem.cmd) > 0
-        call self.close(s:CASCADE_CLOSE)
+    call self.close(s:CASCADE_CLOSE)
+    if type(curItem.cmd) == v:t_string
+        if strcharlen(curItem.cmd) > 0
+            call self.__executor(s:createCallbackItemParm(curItem), self.__editorStatusSupplier())
+            call self.__logger.info(printf("winId: %s, execute cmd: %s", self.winId, curItem.cmd))
+        endif
+    endif
 
-        call self.__executor(s:CallbackItemParam.new(curItem), self.__editorStatusSupplier())
-        call self.__logger.info(printf("winId: %s, execute cmd: %s", self.winId, curItem.cmd))
+    if type(curItem.cmd) == v:t_func
+        call curItem.cmd(s:createCallbackItemParm(curItem), self.__editorStatusSupplier())
+        call self.__logger.info(printf("winId: %s, execute cmd(func): %s", self.winId, curItem.cmd))
     endif
 endfunction
 function! s:ContextWindow.__render()
@@ -929,7 +935,7 @@ function! s:ItemParser.parseVMenuItem(userItem)
     let hotKeyPos = get(quickuiItem, 'key_pos', '')
     let hotKey    = get(quickuiItem, 'key_char', '')
     let isSep     = get(a:userItem, 'isSep', '')
-    let cmd       = get(a:userItem, 'cmd', '')
+    let Cmd       = get(a:userItem, 'cmd', '')
     let tip       = get(a:userItem, 'tip', '')
     let icon      = get(a:userItem, 'icon', '')
     let shortKey  = get(a:userItem, 'shortKey', '')
@@ -966,7 +972,7 @@ function! s:ItemParser.parseVMenuItem(userItem)
     return s:ContextItem.new(
                 \#{name: name,
                 \icon: icon,
-                \cmd: cmd,
+                \cmd: Cmd,
                 \tip: tip,
                 \shortKey: shortKey,
                 \hotKey: hotKey,
@@ -2185,6 +2191,19 @@ if 0
         call assert_equal(1, s:VMenuManager.__focusedWindow.contextItemList[1].isSep)
         call assert_equal(1, s:VMenuManager.__focusedWindow.contextItemList[4].isSep)
         call assert_equal("4", s:VMenuManager.__focusedWindow.contextItemList[3].name->trim())
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+    endif
+
+    " cmd can be funcref
+    if 1
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: '1', cmd: { callbackItemParam, editorStatus -> assert_equal("TEST-MODE" , editorStatus.currentMode) }},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.editorStatusSupplier({ -> #{currentMode: 'TEST-MODE' } })
+                    \.build()
+                    \.showAtCursor()
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<CR>"))
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
