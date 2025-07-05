@@ -430,7 +430,11 @@ function! s:ContextWindow.__triggerStatuslineRefresh()
     if has('nvim') == 1
 lua << EOF
     if package.loaded['lualine'] then
-        require('lualine').refresh()
+        require('lualine').refresh({
+            force = true,       -- do an immidiate refresh
+            scope = 'tabpage',  -- scope of refresh all/tabpage/window
+            place = { 'statusline', 'winbar', 'tabline' },  -- lualine segment ro refresh.
+        })
     end
 EOF
     else
@@ -938,7 +942,9 @@ function! s:ItemParser.parseVMenuItem(userItem)
     let Cmd       = get(a:userItem, 'cmd', '')
     let tip       = get(a:userItem, 'tip', '')
     let icon      = get(a:userItem, 'icon', '')
-    let shortKey  = get(a:userItem, 'shortKey', '')
+    let shortKey  = get(quickuiItem, 'desc', '')
+    let descPos = -1    " will be calculated when context window created
+    let descWidth = get(quickuiItem, 'desc_width', 0)
     let group  = get(a:userItem, 'group', '')
     let subItemList = []
     if (has_key(a:userItem, 'subItemList'))
@@ -982,6 +988,8 @@ function! s:ItemParser.parseVMenuItem(userItem)
                 \subItemList: subItemList,
                 \isSep: isSep,
                 \itemVersion: g:VMENU#ITEM_VERSION.VMENU,
+                \descPos: descPos,
+                \descWidth: descWidth,
                 \group: group
                 \})
 endfunction
@@ -1431,12 +1439,13 @@ if 0
 
     " vmenu item parse test
     if 1
-        let contextItem = s:ItemParser.parseVMenuItem(#{name: '&Hi', cmd: 'echom 6', tip: 'tip', icon: 'icon', show-mode: ['n', 'v']})
+        let contextItem = s:ItemParser.parseVMenuItem(#{name: "&Hi\tCtrl-c", cmd: 'echom 6', tip: 'tip', icon: 'icon', show-mode: ['n', 'v']})
         call assert_equal("Hi", contextItem.name, "name parse failed!")
         call assert_equal(0, contextItem.hotKeyPos, "hotKeyPos parse failed!")
         call assert_equal('H', contextItem.hotKey, "hotKey parse failed!")
         call assert_equal('echom 6', contextItem.cmd, "cmd parse failed!")
         call assert_equal('icon', contextItem.icon, "icon parse failed!")
+        call assert_equal("Ctrl-c", contextItem.shortKey, "shortKey parse failed!")
     endif
 
     " second menu parse test
@@ -1677,6 +1686,19 @@ if 0
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("j"))
         let item = s:VMenuManager.__focusedWindow.__curItem
         call assert_equal(-1, item.descPos)
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+
+        " desc pos in vmenu item
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: "1", cmd: ''},
+                    \#{name: "1\t2", cmd: ''},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.build()
+                    \.showAtCursor()
+        let item = s:VMenuManager.__focusedWindow.contextItemList[1]
+        call assert_equal("2", item.name[item.descPos:item.descPos+item.descWidth-1])
+        call assert_equal(['VmenuDesc', 8, 1, 9, 1], item.syntaxRegionList[1])
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
