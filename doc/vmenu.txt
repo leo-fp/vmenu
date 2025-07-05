@@ -192,7 +192,14 @@ It is applicable in top menu and context menu.
 
 4.7 cmd                                                              *vmenu-cmd*
 ----------------------------------------
-The Ex command you want to execute.
+The Ex command you want to execute or a Funcref.
+If cmd is Funcref, it will be called with two parameters.
+Parameters: ~
+  • {callbackItemParam.cmd} (`string|function`): cmd field
+  • {editorStatus.currentMode} (`string`): editor mode
+  • {editorStatus.currentFileType} (`string`): file type of current buffer
+  • {editorStatus.selectedText} (`string`): selected text in visual mode. in
+    others mode, it is empty.
 
 Examples:
 >
@@ -200,6 +207,13 @@ Examples:
    #{name: "&hello", cmd: "Acommand"}
    #{name: "&hello", cmd: 'call plugin-name#function-name("param")'}
    #{name: "&hello", cmd: 'norm j'}
+   #{name: "&hello", cmd: { callbackItemParam, editorStatus -> execute("echom 'hello'", "") }}
+   #{name: "&hello", cmd: { -> execute("echom 'hello'", "") } }
+
+   function MyFunc(callbackItemParam, editorStatus)
+       echo a:editorStatus
+   endfunction
+   #{name: "&hello", cmd: function('MyFunc')}
 
 
 4.8 tip                                                              *vmenu-tip*
