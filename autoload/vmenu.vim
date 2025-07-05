@@ -430,7 +430,11 @@ function! s:ContextWindow.__triggerStatuslineRefresh()
     if has('nvim') == 1
 lua << EOF
     if package.loaded['lualine'] then
-        require('lualine').refresh()
+        require('lualine').refresh({
+            force = true,       -- do an immidiate refresh
+            scope = 'tabpage',  -- scope of refresh all/tabpage/window
+            place = { 'statusline', 'winbar', 'tabline' },  -- lualine segment ro refresh.
+        })
     end
 EOF
     else
