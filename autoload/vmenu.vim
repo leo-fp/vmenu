@@ -285,15 +285,10 @@ function! s:ContextWindowBuilder.new()
     let contextWindowBuilder.__closeKey = "\<ESC>"
     let contextWindowBuilder.__confirmKey = "\<CR>"
     let contextWindowBuilder.__goBottomKey = 'G'
-    let contextWindowBuilder.__executor = { callbackItemParam, editorStatus -> execute(callbackItemParam.cmd) }
     return contextWindowBuilder
 endfunction
 function! s:ContextWindowBuilder.contextItemList(contextItemList)
     let self.__contextItemList = a:contextItemList
-    return self
-endfunction
-function! s:ContextWindowBuilder.executor(executor)
-    let self.__executor = a:executor
     return self
 endfunction
 function! s:ContextWindowBuilder.build()
@@ -340,7 +335,6 @@ function! s:ContextWindow.new(contextWindowBuilder)
     let contextWindow.__traceId = a:contextWindowBuilder.__traceId
     let contextWindow.__errConsumer = a:contextWindowBuilder.__errConsumer
     let contextWindow.__editorStatusSupplier = a:contextWindowBuilder.__editorStatusSupplier
-    let contextWindow.__executor = a:contextWindowBuilder.__executor
     let contextWindow.isOpen = 0
     let contextWindow.parentVmenuWindow = a:contextWindowBuilder.__parentContextWindow
     let contextWindow.__logger = s:Log.new(contextWindow)
@@ -514,7 +508,7 @@ function! s:ContextWindow.__execute()
     call self.close(s:CASCADE_CLOSE)
     if type(curItem.cmd) == v:t_string
         if strcharlen(curItem.cmd) > 0
-            call self.__executor(s:createCallbackItemParm(curItem), self.__editorStatusSupplier())
+            call execute(curItem.cmd)
             call self.__logger.info(printf("winId: %s, execute cmd: %s", self.winId, curItem.cmd))
         endif
     endif
