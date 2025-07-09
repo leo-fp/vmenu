@@ -53,6 +53,7 @@ let s:CallbackItemParam = {}
 function! s:createCallbackItemParm(contextItem)
     let callbackItemParam = deepcopy(s:CallbackItemParam, 1)
     let callbackItemParam.cmd = a:contextItem.cmd
+    let callbackItemParam.name = a:contextItem.originName
     return callbackItemParam
 endfunction
 
@@ -590,6 +591,7 @@ function! s:ContextItem.new(dict)
     let contextItem.cmd             = get(a:dict, 'cmd', '')
     let contextItem.tip             = get(a:dict, 'tip', '')
     let contextItem.name            = get(a:dict, 'name', '')
+    let contextItem.originName      = get(a:dict, 'name', '')        " a copy of name. use in s:CallbackItemParam
     let contextItem.hotKey          = get(a:dict, 'hotKey', '')
     let contextItem.hotKeyPos       = get(a:dict, 'hotKeyPos', -1)   " hotkey position
     let contextItem.isVisible  = get(a:dict, 'isVisible')            " EditorStatus class -> 0/1
@@ -2217,6 +2219,18 @@ if 0
                     \#{name: '1', cmd: { callbackItemParam, editorStatus -> assert_equal("TEST-MODE" , editorStatus.currentMode) }},
                     \], g:VMENU#ITEM_VERSION.VMENU))
                     \.editorStatusSupplier({ -> #{currentMode: 'TEST-MODE' } })
+                    \.build()
+                    \.showAtCursor()
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<CR>"))
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+    endif
+
+    " callbackItemParam should contains origin name
+    if 1
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: '1', cmd: { callbackItemParam, editorStatus -> assert_equal("1" , callbackItemParam.name) }},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
                     \.build()
                     \.showAtCursor()
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<CR>"))
