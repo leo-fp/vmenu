@@ -22,7 +22,7 @@ vmenu-show-if	vmenu.txt	/*vmenu-show-if*
 vmenu-show-mode	vmenu.txt	/*vmenu-show-mode*
 vmenu-subItemList	vmenu.txt	/*vmenu-subItemList*
 vmenu-tip	vmenu.txt	/*vmenu-tip*
-vmenu-tips	vmenu.txt	/*vmenu-tips*
+vmenu-tips-and-tricks	vmenu.txt	/*vmenu-tips-and-tricks*
 vmenu-vmenu_enable_log	vmenu.txt	/*vmenu-vmenu_enable_log*
 vmenu.txt	vmenu.txt	/*vmenu.txt*
 vmenu_enable_echo_tips	vmenu.txt	/*vmenu_enable_echo_tips*

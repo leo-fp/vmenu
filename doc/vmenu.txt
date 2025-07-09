@@ -193,9 +193,10 @@ It is applicable in top menu and context menu.
 4.7 cmd                                                              *vmenu-cmd*
 ----------------------------------------
 The Ex command you want to execute or a Funcref.
-If cmd is Funcref, it will be called with two parameters.
+If cmd is Funcref, it will be called with two dict parameters.
 Parameters: ~
   • {callbackItemParam.cmd} (`string|function`): cmd field
+  • {callbackItemParam.name} (`string`): name feild
   • {editorStatus.currentMode} (`string`): editor mode
   • {editorStatus.currentFileType} (`string`): file type of current buffer
   • {editorStatus.selectedText} (`string`): selected text in visual mode. in
