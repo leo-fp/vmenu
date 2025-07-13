@@ -873,15 +873,25 @@ function! s:VMenuManager.initTopMenuItems(name, userItemList)
         return
     endif
 
-    " the userItemList may mixed with vim-qucikui items and parsed vmenu items.
-    " for the latter, just use directely
-    let IsParsedVmenuItems = { idx, val -> type(val) == v:t_dict && has_key(val, 'itemVersion') && val.itemVersion == g:VMENU#ITEM_VERSION.VMENU }
-    let dropMenuVmenu = filter(copy(a:userItemList), IsParsedVmenuItems)
-
-    let dropMenuQuickui = s:VMenuManager.parseContextItem(filter(a:userItemList, { idx, val -> !IsParsedVmenuItems(idx, val) }))
-    let topMenuItem = s:TopMenuItem.new(topItem.name, topItem.hotKey, topItem.hotKeyPos, dropMenuQuickui + dropMenuVmenu)
+    let topMenuItem = s:TopMenuItem.new(topItem.name, topItem.hotKey,
+                \ topItem.hotKeyPos, self.parseUserDefinedItemList(a:userItemList))
     call add(s:VMenuManager.__allTopMenuItemList, topMenuItem)
     return topMenuItem
+endfunction
+function! s:VMenuManager.parseUserDefinedItemList(userItemList)
+    let IsParsedVmenuItems = { val -> type(val) == v:t_dict && has_key(val, 'itemVersion') }
+
+    let itemList = []
+    " the userItemList may mixed with vim-qucikui items and parsed vmenu items.
+    " for the latter, just use directely
+    for idx in range(a:userItemList->len())
+        if IsParsedVmenuItems(a:userItemList[idx])
+            call add(itemList, deepcopy(a:userItemList[idx], 1))
+        else
+            call add(itemList, s:ItemParser.parseQuickuiItem(a:userItemList[idx]))
+        endif
+    endfor
+    return itemList
 endfunction
 
 function! s:VMenuManager.startGettingUserInput()
@@ -1202,11 +1212,11 @@ endfunction
 "-------------------------------------------------------------------------------
 " API
 "-------------------------------------------------------------------------------
-" content: parsed context item list
+" content: context item list
 " opts.curMode: the mode string when calling this function.
 function! vmenu#openContextWindow(content, opts)
     let contextWindowBuilder = s:ContextWindow.builder()
-                \.contextItemList(a:content)
+                \.contextItemList(s:VMenuManager.parseUserDefinedItemList(a:content))
     if get(a:opts, 'curMode', '') != ''
         let contextWindowBuilder = contextWindowBuilder.editorStatusSupplier({ -> s:getEditorStatus(a:opts.curMode) })
     endif
@@ -2234,6 +2244,24 @@ if 0
                     \.build()
                     \.showAtCursor()
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<CR>"))
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+    endif
+
+    " the order should be kept
+    if 1
+        let s:VMenuManager.__allTopMenuItemList = []
+        call s:VMenuManager.initTopMenuItems('T&est-4e6a9e1b-31e0-49ae-a670-ec0e248ba821', [
+                    \["1", ''],
+                    \vmenu#parse_context([#{name: '2', cmd: ''}], g:VMENU#ITEM_VERSION.VMENU)[0],
+                    \["3", ''],
+                    \])
+        call s:TopMenuWindow.builder()
+                    \.topMenuItemList(s:VMenuManager.__allTopMenuItemList)
+                    \.build()
+                    \.show()
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<CR>"))
+        call assert_equal("2", s:VMenuManager.__allTopMenuItemList[0].contextItemList[1].name->trim())
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 

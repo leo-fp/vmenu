@@ -61,28 +61,21 @@ call vmenu#openTopMenu()
 ```
 
 ## tips and tricks
-* if you want append some vmenu items to your vim-quickui context menu
+* vim-quickui item and vmenu item can be mixed like this
 ```vimscript
 " example
-let quickui_context = [
-            \ ["name", '']
-            \]
-let content = vmenu#parse_context(quickui_context) + vmenu#parse_context([
-            \#{name: 'name', cmd: ''},
-            \], g:VMENU#ITEM_VERSION.VMENU)
-call vmenu#openContextWindow(content, {})
+    " context menu
+    let list = [
+                \ ["vim-quickui item", ''],
+                \ vmenu#parse_context([#{name: "vmenu item", cmd: ""}], g:VMENU#ITEM_VERSION.VMENU)[0]
+                \]
+    call vmenu#openContextWindow(list, {})
 
-```
-
-* if you want append some vmenu items to your vim-quickui menu (top menu)
-```vimscript
-" example
-call vmenu#installTopMenu('menu_name', [
-            \ [ "vim-quickui item name", '', ""] ,
-            \ ] +  vmenu#parse_context([
-                \#{name: 'vmenu item name', cmd: ''},
-                \], g:VMENU#ITEM_VERSION.VMENU)
-            \)
+    " top menu
+    call vmenu#installTopMenu('menu_name', [
+                \ [ "vim-quickui item name", '', ""] ,
+                \ vmenu#parse_context([#{name: 'vmenu item name', cmd: ''}], g:VMENU#ITEM_VERSION.VMENU)[0]
+                \])
 ```
 
 * if you want define a vmenu item that behaves like pressing a key
