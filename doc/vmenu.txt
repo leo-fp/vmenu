@@ -52,7 +52,7 @@ Packer.nvim >
 ------------
 Open context window.
 
-content: parsed context item list. can be create by 'vmenu#parse_context'
+content: context item list. the vim-quckui item and vmenu item can be mixed.
 opts: dict type.
 opts.curMode: the mode string when opening the context window. using ':h mode()'
               to see available values. if definded, 's:EditorStatus.currentMode'
@@ -65,6 +65,13 @@ opts.curMode: the mode string when opening the context window. using ':h mode()'
                 \], g:VMENU#ITEM_VERSION.VMENU)
     vmap <leader>q :call vmenu#openContextWindow(content, #{curMode: 'v'})<CR>
     nmap <leader>q :call vmenu#openContextWindow(content, {})<CR>
+
+    " vim-quickui item and vmenu item can be mixed like this
+    let list = [
+                \ ["vim-quickui item", ''],
+                \ vmenu#parse_context([#{name: "vmenu item", cmd: ""}], g:VMENU#ITEM_VERSION.VMENU)[0]
+                \]
+    call vmenu#openContextWindow(list, #{})
 
 3.2 vmenu#installTopMenu(name, userTopMenu)				*vmenu#installTopMenu()*
 -------------------------
@@ -193,9 +200,10 @@ It is applicable in top menu and context menu.
 4.7 cmd                                                              *vmenu-cmd*
 ----------------------------------------
 The Ex command you want to execute or a Funcref.
-If cmd is Funcref, it will be called with two parameters.
+If cmd is Funcref, it will be called with two dict parameters.
 Parameters: ~
   • {callbackItemParam.cmd} (`string|function`): cmd field
+  • {callbackItemParam.name} (`string`): name feild
   • {editorStatus.currentMode} (`string`): editor mode
   • {editorStatus.currentFileType} (`string`): file type of current buffer
   • {editorStatus.selectedText} (`string`): selected text in visual mode. in
