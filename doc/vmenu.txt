@@ -25,6 +25,7 @@ Version:	0.2.0
     4.9 icon.......................................................|vmenu-icon|
     4.10 subItemList........................................|vmenu-subItemList|
     4.11 group....................................................|vmenu-group|
+    4.12 onFocus................................................|vmenu-onFocus|
 5. vmenu Tips and Tricks................................|vmenu-tips-and-tricks|
 6. global variables....................................|vmenu-global-variables|
     6.1 g:vmenu_enable_log.............................|vmenu-vmenu_enable_log|
@@ -253,6 +254,18 @@ Group string. different group will be separated by separator line
 Example:
 >
     #{name: 'name', cmd: 'echo 1', group: "group_1"},
+
+4.12 onFocus                                                     *vmenu-onFocus*
+----------------------------------------
+The cmd or function that you want to execute when focusing item.
+You can define this field like defining "cmd" field.
+The only difference between "cmd" and "onFocus" is that when "onFocus" is
+executed, no menu window will be closed.
+
+Example:
+>
+    #{name: 'name', cmd: 'echo 1', onFocus: 'echo 2'},
+    #{name: "name", cmd: 'echo 2', onFocus: { callbackItemParam, editorStatus -> execute("echom 'hello'", "") }}
 
 ==============================================================================
 5. vmenu Tips and Tricks						         *vmenu-tips-and-tricks*
