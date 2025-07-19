@@ -418,6 +418,7 @@ function! s:ContextWindow.focusItemByIndex(index)
     call self.__renderHighlight(a:index)
     call self.__triggerStatuslineRefresh()
     call self.__echoTipsIfEnabled()
+    call self.__executeCmdField("onFocus")
     redraw
 endfunction
 function! s:ContextWindow.__triggerStatuslineRefresh()
@@ -504,18 +505,22 @@ function! s:ContextWindow.__expand()
     let self.__subContextWindowOpen = 1
 endfunction
 function! s:ContextWindow.__execute()
-    let curItem = self.contextItemList[self.__curItemIndex]
     call self.close(s:CASCADE_CLOSE)
-    if type(curItem.cmd) == v:t_string
-        if strcharlen(curItem.cmd) > 0
-            call execute(curItem.cmd)
-            call self.__logger.info(printf("winId: %s, execute cmd: %s", self.winId, curItem.cmd))
+    call self.__executeCmdField("cmd")
+endfunction
+function! s:ContextWindow.__executeCmdField(fieldName="cmd")
+    let curItem = self.contextItemList[self.__curItemIndex]
+    let CmdField = curItem[a:fieldName]
+    if type(CmdField) == v:t_string
+        if strcharlen(CmdField) > 0
+            call execute(CmdField)
+            call self.__logger.info(printf("winId: %s, execute cmd: %s", self.winId, CmdField))
         endif
     endif
 
-    if type(curItem.cmd) == v:t_func
-        call curItem.cmd(s:createCallbackItemParm(curItem), self.__editorStatusSupplier())
-        call self.__logger.info(printf("winId: %s, execute cmd(func): %s", self.winId, curItem.cmd))
+    if type(CmdField) == v:t_func
+        call CmdField(s:createCallbackItemParm(curItem), self.__editorStatusSupplier())
+        call self.__logger.info(printf("winId: %s, execute cmd(func): %s", self.winId, CmdField))
     endif
 endfunction
 function! s:ContextWindow.__render()
@@ -588,6 +593,7 @@ function! s:ContextItem.new(dict)
     let contextItem.shortKey        = get(a:dict, 'shortKey', '')
     let contextItem.icon            = get(a:dict, 'icon', '')
     let contextItem.cmd             = get(a:dict, 'cmd', '')
+    let contextItem.onFocus         = get(a:dict, 'onFocus', '')
     let contextItem.tip             = get(a:dict, 'tip', '')
     let contextItem.name            = get(a:dict, 'name', '')
     let contextItem.originName      = get(a:dict, 'name', '')        " a copy of name. use in s:CallbackItemParam
@@ -945,6 +951,7 @@ function! s:ItemParser.parseVMenuItem(userItem)
     let hotKey    = get(quickuiItem, 'key_char', '')
     let isSep     = get(a:userItem, 'isSep', '')
     let Cmd       = get(a:userItem, 'cmd', '')
+    let OnFocus   = get(a:userItem, 'onFocus', '')
     let tip       = get(a:userItem, 'tip', '')
     let icon      = get(a:userItem, 'icon', '')
     let shortKey  = get(quickuiItem, 'desc', '')
@@ -995,7 +1002,8 @@ function! s:ItemParser.parseVMenuItem(userItem)
                 \itemVersion: g:VMENU#ITEM_VERSION.VMENU,
                 \descPos: descPos,
                 \descWidth: descWidth,
-                \group: group
+                \group: group,
+                \onFocus: OnFocus
                 \})
 endfunction
 function! s:ItemParser.parseQuickuiItem(quickuiItem)
@@ -2260,6 +2268,25 @@ if 0
                     \.show()
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<CR>"))
         call assert_equal("2", s:VMenuManager.__allTopMenuItemList[0].contextItemList[1].name->trim())
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+    endif
+
+    " on_focus test
+    if 1
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: '1', cmd: '', onFocus: { callbackItemParam, editorStatus -> vmenu#testEcho("6af05433-6cc3-4fb3-9040-ec8139390709") }},
+                    \#{name: '1', cmd: '', onFocus: 'call vmenu#testEcho("e65d3d2f-5e0a-4481-9b99-079ee09e9825")'},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.traceId("xxx")
+                    \.build()
+                    \.showAtCursor()
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<CR>"))
+        call assert_equal("1", s:VMenuManager.__allTopMenuItemList[0].contextItemList[0].name->trim())
+        call assert_true(index(s:testList, "6af05433-6cc3-4fb3-9040-ec8139390709") != -1)
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("j"))
+        call assert_true(index(s:testList, "e65d3d2f-5e0a-4481-9b99-079ee09e9825") != -1)
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif

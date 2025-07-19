@@ -110,6 +110,23 @@ call vmenu#openContextWindow(vmenu#parse_context([
             \], g:VMENU#ITEM_VERSION.VMENU), #{curMode: 'v'})
 
 ```
+
+* preview installed colorscheme (kind of lame, but it works)
+```vimscript
+call vmenu#openContextWindow(vmenu#parse_context([
+            \#{name: "preview colorscheme\t", subItemList:
+            \ map(getcompletion('', 'color'),
+            \  { idx, val
+            \  -> #{
+            \       name: val,
+            \       tip: "current colorscheme: " .. val,
+            \       onFocus: { -> execute("colorscheme " .. val) }
+            \      }
+            \  })
+            \},
+            \], g:VMENU#ITEM_VERSION.VMENU), #{})
+```
+
 * if you want a more flexible way to control vmenu item show status or deactive status, you can
 define a function to `show-if` or `deactive-if` field. for more details, check `:h vmenu`
 
