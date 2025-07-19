@@ -52,7 +52,6 @@ endfunction
 let s:CallbackItemParam = {}
 function! s:createCallbackItemParm(contextItem)
     let callbackItemParam = deepcopy(s:CallbackItemParam, 1)
-    let callbackItemParam.cmd = a:contextItem.cmd
     let callbackItemParam.name = a:contextItem.originName
     return callbackItemParam
 endfunction
