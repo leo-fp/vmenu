@@ -18,6 +18,7 @@ vmenu-installation	vmenu.txt	/*vmenu-installation*
 vmenu-intro	vmenu.txt	/*vmenu-intro*
 vmenu-item-field	vmenu.txt	/*vmenu-item-field*
 vmenu-name	vmenu.txt	/*vmenu-name*
+vmenu-onFocus	vmenu.txt	/*vmenu-onFocus*
 vmenu-show-if	vmenu.txt	/*vmenu-show-if*
 vmenu-show-mode	vmenu.txt	/*vmenu-show-mode*
 vmenu-subItemList	vmenu.txt	/*vmenu-subItemList*
