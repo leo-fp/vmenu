@@ -257,16 +257,7 @@ function! s:VmenuWindow.handleUserInput(inputEvent, doAfterKeyStroke={ contextWi
         execute self.__delayTime .. 'sleep'
     endif
 
-    if a:inputEvent.char == "\<LeftMouse>"
-        call self.executeByLeftMouse(a:inputEvent)
-    endif
-
-    if has_key(self.__actionMap, a:inputEvent.char)
-        call self.__actionMap[a:inputEvent.char]()
-        return
-    else
-        " do nothing
-    endif
+    call get(self.__actionMap, a:inputEvent.char, { -> { -> ''}})(a:inputEvent)()
 
     call a:doAfterKeyStroke(deepcopy(self, 1))
 endfunction
@@ -325,7 +316,7 @@ function! s:ContextWindow.new(contextWindowBuilder)
     let contextWindow.__delayTime = a:contextWindowBuilder.__delayTime
     for i in range(len(contextWindow.contextItemList))
         if contextWindow.contextItemList[i].hotKey != ''
-            call extend(contextWindow.hotKeyList, [s:HotKey.new(contextWindow.contextItemList[i].hotKey->tolower(), i)])
+            call add(contextWindow.hotKeyList, s:HotKey.new(contextWindow.contextItemList[i].hotKey->tolower(), i))
         endif
     endfor
 
@@ -341,13 +332,14 @@ function! s:ContextWindow.new(contextWindowBuilder)
     call contextWindow.__logger.info(printf("new ContextWindow created, winId: %s", contextWindow.winId))
 
     let actionMap = {}
-    let actionMap[a:contextWindowBuilder.__closeKey]      = function(contextWindow.close,       [s:CLOSE_SELF_ONLY, s:InputEvent.new(a:contextWindowBuilder.__closeKey)], contextWindow)
-    let actionMap[a:contextWindowBuilder.__goNextKey]     = function(contextWindow.focusNext,   [], contextWindow)
-    let actionMap[a:contextWindowBuilder.__goPreviousKey] = function(contextWindow.focusPrev,   [], contextWindow)
-    let actionMap[a:contextWindowBuilder.__goBottomKey]   = function(contextWindow.focusBottom, [], contextWindow)
-    let actionMap[a:contextWindowBuilder.__confirmKey]    = function(contextWindow.enter,     [], contextWindow)
+    let actionMap[a:contextWindowBuilder.__closeKey]      = { inputEvent -> function(contextWindow.close,       [s:CLOSE_SELF_ONLY, s:InputEvent.new(a:contextWindowBuilder.__closeKey)], contextWindow) }
+    let actionMap[a:contextWindowBuilder.__goNextKey]     = { inputEvent -> function(contextWindow.focusNext,          [], contextWindow) }
+    let actionMap[a:contextWindowBuilder.__goPreviousKey] = { inputEvent -> function(contextWindow.focusPrev,          [], contextWindow) }
+    let actionMap[a:contextWindowBuilder.__goBottomKey]   = { inputEvent -> function(contextWindow.focusBottom,        [], contextWindow) }
+    let actionMap[a:contextWindowBuilder.__confirmKey]    = { inputEvent -> function(contextWindow.enter,              [], contextWindow) }
+    let actionMap["\<LeftMouse>"]                         = { inputEvent -> function(contextWindow.executeByLeftMouse, [inputEvent], contextWindow) }
     for hotKey in contextWindow.hotKeyList
-        let actionMap[hotKey['keyChar']] = function(contextWindow.executeByHotKey, [hotKey.keyChar], contextWindow)
+        let actionMap[hotKey.keyChar] = { inputEvent -> function(contextWindow.executeByHotKey, [inputEvent.char], contextWindow) }
     endfor
 
     let contextWindow.__actionMap = actionMap
@@ -669,7 +661,7 @@ function! s:TopMenuWindow.new(topMenuWindowBuilder)
     let topMenuWindow.winWidth = &columns
     for i in range(len(topMenuWindow.topMenuItemList))
         if topMenuWindow.topMenuItemList[i].hotKey != ''
-            call extend(topMenuWindow.hotKeyList, [s:HotKey.new(topMenuWindow.topMenuItemList[i].hotKey->tolower(), i)])
+            call add(topMenuWindow.hotKeyList, s:HotKey.new(topMenuWindow.topMenuItemList[i].hotKey->tolower(), i))
         endif
     endfor
 
@@ -685,13 +677,14 @@ function! s:TopMenuWindow.new(topMenuWindowBuilder)
     call topMenuWindow.__logger.info(printf("new TopMenuWindow created, winId: %s", topMenuWindow.winId))
 
     let actionMap = {}
-    let actionMap[a:topMenuWindowBuilder.__closeKey]      = function(topMenuWindow.close,       [s:CLOSE_SELF_ONLY, a:topMenuWindowBuilder.__closeKey], topMenuWindow)
-    let actionMap[a:topMenuWindowBuilder.__goNextKey]     = function(topMenuWindow.focusNext,   [], topMenuWindow)
-    let actionMap[a:topMenuWindowBuilder.__goPreviousKey] = function(topMenuWindow.focusPrev,   [], topMenuWindow)
-    let actionMap[a:topMenuWindowBuilder.__goBottomKey]   = function(topMenuWindow.focusBottom, [], topMenuWindow)
-    let actionMap[a:topMenuWindowBuilder.__confirmKey]    = function(topMenuWindow.enter,     [], topMenuWindow)
+    let actionMap[a:topMenuWindowBuilder.__closeKey]      = { inputEvent -> function(topMenuWindow.close,              [s:CLOSE_SELF_ONLY, a:topMenuWindowBuilder.__closeKey], topMenuWindow) }
+    let actionMap[a:topMenuWindowBuilder.__goNextKey]     = { inputEvent -> function(topMenuWindow.focusNext,          [], topMenuWindow) }
+    let actionMap[a:topMenuWindowBuilder.__goPreviousKey] = { inputEvent -> function(topMenuWindow.focusPrev,          [], topMenuWindow) }
+    let actionMap[a:topMenuWindowBuilder.__goBottomKey]   = { inputEvent -> function(topMenuWindow.focusBottom,        [], topMenuWindow) }
+    let actionMap[a:topMenuWindowBuilder.__confirmKey]    = { inputEvent -> function(topMenuWindow.enter,              [], topMenuWindow) }
+    let actionMap["\<LeftMouse>"]                         = { inputEvent -> function(topMenuWindow.executeByLeftMouse, [inputEvent], topMenuWindow) }
     for hotKey in topMenuWindow.hotKeyList
-        let actionMap[hotKey['keyChar']] = function(topMenuWindow.executeByHotKey, [hotKey.keyChar], topMenuWindow)
+        let actionMap[hotKey['keyChar']] = { inputEvent -> function(topMenuWindow.executeByHotKey, [inputEvent.char], topMenuWindow) }
     endfor
 
     let topMenuWindow.__actionMap = actionMap
@@ -906,12 +899,14 @@ function! s:VMenuManager.startGettingUserInput()
 
         let ch = (type(code) == v:t_number)? nr2char(code) : code
 
+        let inputEvent = {}
         if ch == "\<LeftMouse>"
-            call self.__focusedWindow.handleUserInput(s:InputEvent.new("\<LeftMouse>", getmousepos()))
-            continue
+            let inputEvent = s:InputEvent.new("\<LeftMouse>", getmousepos())
+        else
+            let inputEvent = s:InputEvent.new(ch)
         endif
 
-        call self.__focusedWindow.handleUserInput(s:InputEvent.new(ch))
+        call self.__focusedWindow.handleUserInput(inputEvent)
     endwhile
 endfunction
 
@@ -1503,6 +1498,22 @@ if 0
                     \.showAtCursor()
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("h"), { contextWindow -> assert_equal(0, contextWindow.isOpen) })
         call assert_true(index(s:testList, msg) != -1)
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+
+        " expand by hotkey
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: "&a", subItemList: [#{name: '1.1', cmd: ''}]},
+                    \#{name: "&b", subItemList: [#{name: '2.1', cmd: ''}]},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.traceId("xxx")
+                    \.build()
+                    \.showAtCursor()
+        "call s:VMenuManager.startGettingUserInput()
+        call assert_equal(2, s:VMenuManager.__focusedWindow.contextItemList->len())
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("a"))
+        call assert_equal("1.1", s:VMenuManager.__focusedWindow.__curItem.name->trim())
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
@@ -2279,7 +2290,6 @@ if 0
                     \#{name: '1', cmd: '', onFocus: { callbackItemParam, editorStatus -> vmenu#testEcho("6af05433-6cc3-4fb3-9040-ec8139390709") }},
                     \#{name: '1', cmd: '', onFocus: 'call vmenu#testEcho("e65d3d2f-5e0a-4481-9b99-079ee09e9825")'},
                     \], g:VMENU#ITEM_VERSION.VMENU))
-                    \.traceId("xxx")
                     \.build()
                     \.showAtCursor()
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<CR>"))
