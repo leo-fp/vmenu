@@ -320,7 +320,7 @@ function! s:ContextWindow.new(contextWindowBuilder)
         endif
     endfor
 
-    let contextWindow.__curItemIndex = 0
+    let contextWindow.__curItemIndex = -1
     let contextWindow.__curItem = get(contextWindow.contextItemList, 0, {}) " currently selected context item
     let contextWindow.__subContextWindowOpen = 0
     let contextWindow.__traceId = a:contextWindowBuilder.__traceId
@@ -382,7 +382,14 @@ function! s:ContextWindow.showAt(x, y)
     let self.isOpen = 1
 
     call s:VMenuManager.setFocusedWindow(self)
-    call self.focusItemByIndex(self.__curItemIndex)
+    let focusIdx = indexof(self.contextItemList, {i, v -> self.canBeFocused(i)})
+    if focusIdx == -1
+        call foreach(range(self.contextItemList->len()), {idx, val -> self.__renderHighlight(val)})
+        redraw
+    else
+        call self.focusItemByIndex(focusIdx)
+    endif
+
     call self.__logger.info(printf("ContextWindow opened at x:%s, y:%s, vmenu winId: %s,
                 \ quickui winId: %s", self.x, self.y, self.winId, self.quickuiWindow.winid))
 endfunction
@@ -1943,6 +1950,19 @@ if 0
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
+    " focus first valid item after opening context window
+    if 1
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: '1', cmd: '', deactive-if: function('s:alwaysTruePredicate')},
+                    \#{name: '2', cmd: ''},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.build()
+                    \.showAtCursor()
+        call assert_equal("2", s:VMenuManager.__focusedWindow.__curItem.name->trim())
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+    endif
+
     " top menu: click and open sub menu
     if 1
         let s:VMenuManager.__allTopMenuItemList = []
@@ -2027,13 +2047,13 @@ if 0
         call s:ContextWindow.builder()
                     \.contextItemList(s:VMenuManager.parseContextItem([
                     \#{isSep: 1},
-                    \#{name: '1', cmd: '', icon: "i"},
+                    \#{name: '1', cmd: ''},
                     \], g:VMENU#ITEM_VERSION.VMENU))
                     \.minWidth(10)
                     \.build()
                     \.showAtCursor()
         call assert_equal(10, s:VMenuManager.__focusedWindow.winWidth)
-        call assert_equal("————————", s:VMenuManager.__focusedWindow.__curItem.name->trim())
+        call assert_equal("1", s:VMenuManager.__focusedWindow.__curItem.name->trim())
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
