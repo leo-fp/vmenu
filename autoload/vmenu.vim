@@ -444,27 +444,22 @@ function! s:ContextWindow.getFocusedItemTips()
     return self.__curItem.tip
 endfunction
 function! s:ContextWindow.focusNext()
-    let idx = self.__curItemIndex + 1
-    while idx < self.contextItemList->len() && !self.canBeFocused(idx)
-        let idx += 1
-    endwhile
-    if idx < self.contextItemList->len()
-        call self.focusItemByIndex(idx)
-    else
-        " no valid next item. do nothing
-    endif
+    let searchSeq = range(self.__curItemIndex+1, self.contextItemList->len()-1)
+    call self.__focusFirstMatch(searchSeq)
 endfunction
 function! s:ContextWindow.focusPrev()
-    let idx = self.__curItemIndex - 1
-    while idx >= 0 && !self.canBeFocused(idx)
-        let idx -= 1
-    endwhile
-    if idx >= 0
-        call self.focusItemByIndex(idx)
+    let reverseSeq = reverse(range(self.__curItemIndex))
+    call self.__focusFirstMatch(reverseSeq)
+endfunction
+function! s:ContextWindow.__focusFirstMatch(searchSeq)
+    let i = indexof(a:searchSeq, {i, v -> self.canBeFocused(v)})
+    if i != -1
+        call self.focusItemByIndex(a:searchSeq[i])
     else
-        " no valid previous item. do nothing
+        " no valid item. do nothing
     endif
 endfunction
+
 function! s:ContextWindow.focusBottom()
     call self.focusItemByIndex(len(self.contextItemList)-1)
 endfunction
