@@ -27,19 +27,12 @@ just have some ideas want to try, start over seems easier and tempting
 * This plugin may changes radically, use with caution
 
 ## Install
-packer.nvim
-```vimscript
-    use { "leo-fp/vmenu",
-        requires = "skywind3000/vim-quickui"
-    }
+install these two plugins using your favorite plugin manager.
+```
+skywind3000/vim-quickui
+leo-fp/vmenu
 
 ```
-vim-plug
-```vimscript
-    Plug 'skywind3000/vim-quickui'
-    Plug 'leo-fp/vmenu'
-```
-
 ## comming from vim-quickui
 context menu:
 ```vimscript
