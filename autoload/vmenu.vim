@@ -726,33 +726,22 @@ function! s:TopMenuWindow.getFocusedItemTips()
 endfunction
 function! s:TopMenuWindow.enter()
     let subItemList = self.topMenuItemList[self.__curItemIndex].contextItemList
-    if (!subItemList->empty())
-        let x = self.__getStartColumnNrByIndex(self.__curItemIndex)
-        let y = 1
-        try
-            let subContextWindow = s:ContextWindow.builder()
-                        \.contextItemList(subItemList)
-                        \.parentVmenuWindow(self)
-                        \.build()
-                        \.showAt(x, y)
-        catch "NoVisibleItemException"
-            return
-        endtry
-        let self.__subContextWindowOpen = 1
-    else
-        if !has_key(self.topMenuItemList[self.__curItemIndex], 'cmd')
-            return
-        endif
-
-        let cmd = self.topMenuItemList[self.__curItemIndex].cmd
-        if strcharlen(cmd) > 0
-            exec cmd
-            call self.__logger.info(printf("winId: %s, execute cmd: %s", self.winId, cmd))
-        endif
-        "call self.quickuiWindow.execute(cmd)
-
-        call self.close(s:CASCADE_CLOSE)
+    if subItemList->empty()
+        return
     endif
+
+    let x = self.__getStartColumnNrByIndex(self.__curItemIndex)
+    let y = 1
+    try
+        let subContextWindow = s:ContextWindow.builder()
+                    \.contextItemList(subItemList)
+                    \.parentVmenuWindow(self)
+                    \.build()
+                    \.showAt(x, 1)
+    catch "NoVisibleItemException"
+        return
+    endtry
+    let self.__subContextWindowOpen = 1
 endfunction
 " calculate start column to render focused top menu item
 function! s:TopMenuWindow.__getStartColumnNrByIndex(index)
