@@ -165,11 +165,24 @@ function! s:VmenuWindow.new()
     let vmenuWindow.__actionMap = {}
     let vmenuWindow.__errConsumer = function("s:printWarn")
     let vmenuWindow.__curItemIndex = -1
+    let vmenuWindow.__componentLength = 0
     return vmenuWindow
 endfunction
 function! s:VmenuWindow.focusNext()
+    let searchSeq = range(self.__curItemIndex+1, max([0, self.__componentLength-1]))
+    call self.__focusFirstMatch(searchSeq)
 endfunction
 function! s:VmenuWindow.focusPrev()
+    let reverseSeq = reverse(range(self.__curItemIndex))
+    call self.__focusFirstMatch(reverseSeq)
+endfunction
+function! s:VmenuWindow.__focusFirstMatch(searchSeq)
+    let i = indexof(a:searchSeq, {i, v -> self.canBeFocused(v)})
+    if i != -1
+        call self.focusItemByIndex(a:searchSeq[i])
+    else
+        " no valid item. do nothing
+    endif
 endfunction
 function! s:VmenuWindow.focusItemByIndex(index)
 endfunction
@@ -314,6 +327,7 @@ function! s:ContextWindow.new(contextWindowBuilder)
     let contextWindow.hotKeyList = []
     let contextWindow.winWidth = strcharlen(contextWindow.contextItemList[0].name)
     let contextWindow.winHeight = contextWindow.contextItemList->len()
+    let contextWindow.__componentLength = contextWindow.contextItemList->len()
     let contextWindow.x = a:contextWindowBuilder.__x " column number
     let contextWindow.y = a:contextWindowBuilder.__y " line number
     let contextWindow.__delayTime = a:contextWindowBuilder.__delayTime
@@ -447,23 +461,6 @@ endfunction
 function! s:ContextWindow.getFocusedItemTips()
     return self.getCurItem().tip
 endfunction
-function! s:ContextWindow.focusNext()
-    let searchSeq = range(self.__curItemIndex+1, self.contextItemList->len()-1)
-    call self.__focusFirstMatch(searchSeq)
-endfunction
-function! s:ContextWindow.focusPrev()
-    let reverseSeq = reverse(range(self.__curItemIndex))
-    call self.__focusFirstMatch(reverseSeq)
-endfunction
-function! s:ContextWindow.__focusFirstMatch(searchSeq)
-    let i = indexof(a:searchSeq, {i, v -> self.canBeFocused(v)})
-    if i != -1
-        call self.focusItemByIndex(a:searchSeq[i])
-    else
-        " no valid item. do nothing
-    endif
-endfunction
-
 function! s:ContextWindow.focusBottom()
     call self.focusItemByIndex(len(self.contextItemList)-1)
 endfunction
@@ -665,6 +662,7 @@ function! s:TopMenuWindow.new(topMenuWindowBuilder)
     let topMenuWindow.winId = rand(srand())
     let topMenuWindow.hotKeyList = []
     let topMenuWindow.winWidth = &columns
+    let topMenuWindow.__componentLength = topMenuWindow.topMenuItemList->len()
     for i in range(len(topMenuWindow.topMenuItemList))
         if topMenuWindow.topMenuItemList[i].hotKey != ''
             call add(topMenuWindow.hotKeyList, s:HotKey.new(topMenuWindow.topMenuItemList[i].hotKey->tolower(), i))
@@ -726,51 +724,24 @@ endfunction
 function! s:TopMenuWindow.getFocusedItemTips()
     return ''
 endfunction
-function! s:TopMenuWindow.focusNext()
-    let idx = self.__curItemIndex + 1
-    if idx < self.topMenuItemList->len()
-        call self.focusItemByIndex(idx)
-    else
-        " no valid next item. do nothing
-    endif
-endfunction
-function! s:TopMenuWindow.focusPrev()
-    let idx = self.__curItemIndex - 1
-    if idx >= 0
-        call self.focusItemByIndex(idx)
-    else
-        " no valid previous item. do nothing
-    endif
-endfunction
 function! s:TopMenuWindow.enter()
     let subItemList = self.topMenuItemList[self.__curItemIndex].contextItemList
-    if (!subItemList->empty())
-        let x = self.__getStartColumnNrByIndex(self.__curItemIndex)
-        let y = 1
-        try
-            let subContextWindow = s:ContextWindow.builder()
-                        \.contextItemList(subItemList)
-                        \.parentVmenuWindow(self)
-                        \.build()
-                        \.showAt(x, y)
-        catch "NoVisibleItemException"
-            return
-        endtry
-        let self.__subContextWindowOpen = 1
-    else
-        if !has_key(self.topMenuItemList[self.__curItemIndex], 'cmd')
-            return
-        endif
-
-        let cmd = self.topMenuItemList[self.__curItemIndex].cmd
-        if strcharlen(cmd) > 0
-            exec cmd
-            call self.__logger.info(printf("winId: %s, execute cmd: %s", self.winId, cmd))
-        endif
-        "call self.quickuiWindow.execute(cmd)
-
-        call self.close(s:CASCADE_CLOSE)
+    if subItemList->empty()
+        return
     endif
+
+    let x = self.__getStartColumnNrByIndex(self.__curItemIndex)
+    let y = 1
+    try
+        let subContextWindow = s:ContextWindow.builder()
+                    \.contextItemList(subItemList)
+                    \.parentVmenuWindow(self)
+                    \.build()
+                    \.showAt(x, 1)
+    catch "NoVisibleItemException"
+        return
+    endtry
+    let self.__subContextWindowOpen = 1
 endfunction
 " calculate start column to render focused top menu item
 function! s:TopMenuWindow.__getStartColumnNrByIndex(index)
