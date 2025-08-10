@@ -3,6 +3,8 @@ another menu plugin. made as replacement of menu and context menu of vim-quickui
 case
 
 ## screenshot
+note: These items in the picture are not provided in this plugin.
+
 ![top-menu](./screenshot/top-menu.png)
 ![context-menu](./screenshot/context-menu.png)
 
@@ -21,7 +23,7 @@ just have some ideas want to try, start over seems easier and tempting
 * better looking
 
 ### 0.4.0
-* an always open top menu
+* an always opening top menu
 
 ## NOTE
 * This plugin may changes radically, use with caution
@@ -50,6 +52,36 @@ call quickui#menu#install
 call vmenu#installTopMenu
 " then
 call vmenu#openTopMenu()
+
+```
+
+## quick start for beginner
+```vimscript
+"-------------------------------------------------------------------------------
+" top menu
+"-------------------------------------------------------------------------------
+call vmenu#installTopMenu('&File', vmenu#parse_context([
+            \#{name: "&new\t", subItemList: [
+            \   #{name: "window", cmd: "new"}
+            \]}
+            \], g:VMENU#ITEM_VERSION.VMENU))
+
+call vmenu#installTopMenu('Help (&?)', vmenu#parse_context([
+            \#{name: "vmenu", cmd: 'h vmenu.txt'}
+            \], g:VMENU#ITEM_VERSION.VMENU))
+
+" <leader> is backslash by default
+nnoremap <silent> <leader><leader> :call vmenu#openTopMenu()<CR>
+
+"-------------------------------------------------------------------------------
+" context menu
+"-------------------------------------------------------------------------------
+let content = [
+            \#{name: "Copy", cmd: 'norm gv"+y', show-mode: ["v"], icon:'󰆏'},
+            \#{name: "paste", cmd: 'norm "+p', show-mode: ["n"]}
+            \]
+nnoremap <silent> <leader>q :call vmenu#openContextWindow(vmenu#parse_context(content, g:VMENU#ITEM_VERSION.VMENU), {})<CR>
+vnoremap <silent> <leader>q :call vmenu#openContextWindow(vmenu#parse_context(content, g:VMENU#ITEM_VERSION.VMENU), #{curMode: "v"})<CR>
 
 ```
 
