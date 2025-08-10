@@ -41,10 +41,10 @@ vim-quickui in personal use case.
 ==============================================================================
 2. Installation 						                    *vmenu-installation*
 
-Packer.nvim >
-    use { "leo-fp/vmenu",
-        requires = "skywind3000/vim-quickui"
-    }
+install these two plugins using your favorite plugin manager. >
+
+    skywind3000/vim-quickui
+    leo-fp/vmenu
 
 ==============================================================================
 3. Functions                                                   *vmenu-Functions*

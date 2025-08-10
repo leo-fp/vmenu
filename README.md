@@ -3,6 +3,8 @@ another menu plugin. made as replacement of menu and context menu of vim-quickui
 case
 
 ## screenshot
+note: These items in the picture are not provided in this plugin.
+
 ![top-menu](./screenshot/top-menu.png)
 ![context-menu](./screenshot/context-menu.png)
 
@@ -21,7 +23,7 @@ just have some ideas want to try, start over seems easier and tempting
 * better looking
 
 ### 0.4.0
-* an always open top menu
+* an always opening top menu
 
 ## NOTE
 * This plugin may changes radically, use with caution
