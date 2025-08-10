@@ -53,6 +53,36 @@ call vmenu#openTopMenu()
 
 ```
 
+## quick start for beginner
+```vimscript
+"-------------------------------------------------------------------------------
+" top menu
+"-------------------------------------------------------------------------------
+call vmenu#installTopMenu('&File', vmenu#parse_context([
+            \#{name: "&new\t", subItemList: [
+            \   #{name: "window", cmd: "new"}
+            \]}
+            \], g:VMENU#ITEM_VERSION.VMENU))
+
+call vmenu#installTopMenu('Help (&?)', vmenu#parse_context([
+            \#{name: "vmenu", cmd: 'h vmenu.txt'}
+            \], g:VMENU#ITEM_VERSION.VMENU))
+
+" <leader> is backslash by default
+nnoremap <silent> <leader><leader> :call vmenu#openTopMenu()<CR>
+
+"-------------------------------------------------------------------------------
+" context menu
+"-------------------------------------------------------------------------------
+let content = [
+            \#{name: "Copy", cmd: 'norm gv"+y', show-mode: ["v"], icon:'󰆏'},
+            \#{name: "paste", cmd: 'norm "+p', show-mode: ["n"]}
+            \]
+nnoremap <silent> <leader>q :call vmenu#openContextWindow(vmenu#parse_context(content, g:VMENU#ITEM_VERSION.VMENU), {})<CR>
+vnoremap <silent> <leader>q :call vmenu#openContextWindow(vmenu#parse_context(content, g:VMENU#ITEM_VERSION.VMENU), #{curMode: "v"})<CR>
+
+```
+
 ## tips and tricks
 * vim-quickui item and vmenu item can be mixed like this
 ```vimscript
