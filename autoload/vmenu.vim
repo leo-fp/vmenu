@@ -462,7 +462,7 @@ function! s:ContextWindow.getFocusedItemTips()
     return self.getCurItem().tip
 endfunction
 function! s:ContextWindow.focusBottom()
-    call self.focusItemByIndex(len(self.contextItemList)-1)
+    call self.__focusFirstMatch(reverse(range(self.__componentLength)))
 endfunction
 function! s:ContextWindow.canBeFocused(idx)
     return self.contextItemList[a:idx].isSep == 0 && self.contextItemList[a:idx].isInactive(self.__editorStatusSupplier()) == 0
@@ -1753,9 +1753,10 @@ if 0
     if 1
         call s:ContextWindow.builder()
                     \.contextItemList(s:VMenuManager.parseContextItem([
-                    \["1", ''],
-                    \["2", '']
-                    \]))
+                    \#{name: '1', cmd: ''},
+                    \#{name: '2', cmd: ''},
+                    \#{name: 'INACTIVE ITEM', cmd: '', deactive-if: function('s:alwaysTruePredicate')}
+                    \], g:VMENU#ITEM_VERSION.VMENU))
                     \.build()
                     \.showAtCursor()
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("G"))
