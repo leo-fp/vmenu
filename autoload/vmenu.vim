@@ -78,6 +78,7 @@ hi! VmenuInactive guifg=#4D5360
 hi! VmenuHotkey1 gui=underline guifg=#BEC0C6
 hi! VmenuSelectedHotkey gui=underline guibg=#2E436E guifg=#BEC0C6
 hi! VmenuInactiveHotKey gui=underline guifg=#4D5360
+hi! VmenuScrollbar guibg=#4D4D4F
 
 "-------------------------------------------------------------------------------
 " class VmenuWindowBuilder
@@ -98,6 +99,7 @@ function! s:VmenuWindowBuilder.new()
     let vmenuWindowBuilder.__errConsumer = function("s:printWarn")
     let vmenuWindowBuilder.__minWidth = 0   " minimal window width. only supported in context menu
     let vmenuWindowBuilder.__editorStatusSupplier = function("s:getEditorStatus")
+    let vmenuWindowBuilder.__scrollingWindowSize = 20    " the number of entries in the scrolling window
     return vmenuWindowBuilder
 endfunction
 function! s:VmenuWindowBuilder.delay(seconds)
@@ -134,6 +136,10 @@ function! s:VmenuWindowBuilder.errConsumer(errConsumer)
 endfunction
 function! s:VmenuWindowBuilder.minWidth(width)
     let self.__minWidth = a:width
+    return self
+endfunction
+function! s:VmenuWindowBuilder.scrollingWindowSize(itemCnt)
+    let self.__scrollingWindowSize = a:itemCnt
     return self
 endfunction
 function! s:VmenuWindowBuilder.editorStatusSupplier(editorStatusSupplier)
@@ -327,6 +333,9 @@ function! s:ContextWindow.new(contextWindowBuilder)
     let contextWindow.hotKeyList = []
     let contextWindow.winWidth = strcharlen(contextWindow.contextItemList[0].name)
     let contextWindow.winHeight = contextWindow.contextItemList->len()
+    let contextWindow.scrollingWindowSize = min([a:contextWindowBuilder.__scrollingWindowSize, contextWindow.winHeight])
+    let contextWindow.renderStartIdx = 0
+    let contextWindow.renderEndIdx = min([a:contextWindowBuilder.__scrollingWindowSize-1, contextWindow.winHeight])
     let contextWindow.__componentLength = contextWindow.contextItemList->len()
     let contextWindow.x = a:contextWindowBuilder.__x " column number
     let contextWindow.y = a:contextWindowBuilder.__y " line number
@@ -385,8 +394,8 @@ function! s:ContextWindow.showAt(x, y)
     endif
 
     let opts = {}
-    let text = self.__render()
-    let opts.h = self.contextItemList->len()
+    let text = self.__render(0, self.renderEndIdx)
+    let opts.h = self.scrollingWindowSize
     let opts.w = self.winWidth
     let opts.color = "VmenuBg"
     let opts.y = a:y
@@ -490,7 +499,8 @@ function! s:ContextWindow.__expand()
                 \.editorStatusSupplier(self.__editorStatusSupplier)
                 \.build()
     let x = self.x + self.winWidth
-    let y = self.y + self.__curItemIndex
+    " need minus self.renderStartIdx to correct sub window location when scrollbar is activated
+    let y = self.y + self.__curItemIndex - self.renderStartIdx
 
     " if there are insufficient space for sub context window at right side, then open at left side
     if self.x + self.winWidth + subContextWindow.winWidth > &columns
@@ -518,24 +528,53 @@ function! s:ContextWindow.__executeCmdField(fieldName="cmd")
         call self.__logger.info(printf("winId: %s, execute cmd(func): %s", self.winId, CmdField))
     endif
 endfunction
-function! s:ContextWindow.__render()
-    return reduce(self.contextItemList, { acc, val -> add(acc, val.name) }, [])
+function! s:ContextWindow.__render(start, end)
+    return reduce(self.contextItemList[a:start:a:end], { acc, val -> add(acc, val.name) }, [])
 endfunction
 function! s:ContextWindow.__renderHighlight(offset)
     let win = self.quickuiWindow
 
-    call win.syntax_begin(1)
+    let scrollbarHeight = 2 " fixed scrollbar length
+    if a:offset >= (self.renderStartIdx + self.scrollingWindowSize)
+        let self.renderStartIdx = a:offset - self.scrollingWindowSize + 1
+        let self.renderEndIdx = a:offset
+    endif
+    if a:offset < self.renderStartIdx
+        let self.renderStartIdx = a:offset
+        let self.renderEndIdx = a:offset + self.scrollingWindowSize - 1
+    endif
+
     for index in range(len(self.contextItemList))
-        " inactive item
+        if index < self.renderStartIdx || index > self.renderEndIdx
+            continue
+        endif
+
         let curItem = self.contextItemList[index]
         let curItem.syntaxRegionList = []
+        let needActiveScrollbar = self.scrollingWindowSize < self.contextItemList->len()
+        let endColumnNr = needActiveScrollbar ? win.opts.w - 1 : win.opts.w
+
+        " scrollbar
+        if needActiveScrollbar == 1
+            let scrollbarOffset = (self.scrollingWindowSize - scrollbarHeight) * self.renderStartIdx / (self.contextItemList->len() - self.scrollingWindowSize)
+            let scrollbarStartIdx = self.renderStartIdx + scrollbarOffset
+            if scrollbarStartIdx <= index && index < scrollbarStartIdx + scrollbarHeight
+                call add(curItem.syntaxRegionList, ["VmenuScrollbar", win.opts.w-1, index, win.opts.w, index])
+            endif
+            call self.__logger.info("index: " .. index
+                        \ .. ", renderStartIdx: " .. self.renderStartIdx
+                        \ .. ", scrollbarOffset: " .. scrollbarOffset
+                        \ .. ", scrollbarHeight: " .. scrollbarHeight)
+        endif
+
+        " inactive item
         if curItem.isInactive(self.__editorStatusSupplier()) == 1
             if curItem.hotKeyPos == -1
-                call add(curItem.syntaxRegionList, ["VmenuInactive", 0, index, win.opts.w, index])
+                call add(curItem.syntaxRegionList, ["VmenuInactive", 0, index, endColumnNr, index])
             else
                 call add(curItem.syntaxRegionList, ["VmenuInactive", 0, index, curItem.hotKeyPos, index])
                 call add(curItem.syntaxRegionList, ["VmenuInactiveHotKey", curItem.hotKeyPos, index, curItem.hotKeyPos+1, index])
-                call add(curItem.syntaxRegionList, ["VmenuInactive", curItem.hotKeyPos+1, index, win.opts.w, index])
+                call add(curItem.syntaxRegionList, ["VmenuInactive", curItem.hotKeyPos+1, index, endColumnNr, index])
             endif
 
             continue
@@ -544,11 +583,11 @@ function! s:ContextWindow.__renderHighlight(offset)
         " focused item
         if index == a:offset
             if curItem.hotKeyPos == -1
-                call add(curItem.syntaxRegionList, ["VmenuSelect", 0, index, win.opts.w, index])
+                call add(curItem.syntaxRegionList, ["VmenuSelect", 0, index, endColumnNr, index])
             else
                 call add(curItem.syntaxRegionList, ["VmenuSelect", 0, index, curItem.hotKeyPos, index])
                 call add(curItem.syntaxRegionList, ["VmenuSelectedHotkey", curItem.hotKeyPos, index, curItem.hotKeyPos+1, index])
-                call add(curItem.syntaxRegionList, ["VmenuSelect", curItem.hotKeyPos+1, index, win.opts.w, index])
+                call add(curItem.syntaxRegionList, ["VmenuSelect", curItem.hotKeyPos+1, index, endColumnNr, index])
             endif
 
             continue
@@ -559,19 +598,26 @@ function! s:ContextWindow.__renderHighlight(offset)
 
         " seperator line
         if curItem.isSep == 1
-            call add(curItem.syntaxRegionList, ["VmenuSepLine", 0, index, win.opts.w, index])
+            call add(curItem.syntaxRegionList, ["VmenuSepLine", 0, index, endColumnNr, index])
         endif
 
         " desc
         if curItem.descPos != -1
             call add(curItem.syntaxRegionList, ["VmenuDesc", curItem.descPos, index, curItem.descPos + curItem.descWidth, index])
         endif
+
     endfor
 
+    " refresh content in the scrolling window
+    let textList = self.__render(self.renderStartIdx, self.renderEndIdx)
+    call win.set_text(textList)
+
     " do render
-    for index in range(len(self.contextItemList))
-        for syntax in self.contextItemList[index].syntaxRegionList
-            call win.syntax_region(syntax[0], syntax[1], syntax[2], syntax[3], syntax[4])
+    let visibleItems = self.contextItemList[self.renderStartIdx:self.renderEndIdx]
+    call win.syntax_begin(1)
+    for index in range(len(visibleItems))
+        for syntax in visibleItems[index].syntaxRegionList
+            call win.syntax_region(syntax[0], syntax[1], syntax[2]-self.renderStartIdx, syntax[3], syntax[4]-self.renderStartIdx)
         endfor
     endfor
 
@@ -2290,6 +2336,117 @@ if 0
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("j"))
         call assert_true(index(s:testList, "e65d3d2f-5e0a-4481-9b99-079ee09e9825") != -1)
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+    endif
+
+    " render index changes when scrolling
+    if 1
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: '1', cmd: ''},
+                    \#{name: '2', cmd: ''},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.scrollingWindowSize(1)
+                    \.build()
+                    \.showAtCursor()
+        call assert_equal(0, s:VMenuManager.__focusedWindow.renderStartIdx)
+        call assert_equal(0, s:VMenuManager.__focusedWindow.renderEndIdx)
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("j"))
+        call assert_equal(1, s:VMenuManager.__focusedWindow.renderStartIdx)
+        call assert_equal(1, s:VMenuManager.__focusedWindow.renderEndIdx)
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("k"))
+        call assert_equal(0, s:VMenuManager.__focusedWindow.renderStartIdx)
+        call assert_equal(0, s:VMenuManager.__focusedWindow.renderEndIdx)
+
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+    endif
+
+    " test focused item syntax when scrolling down
+    if 1
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: '1', cmd: ''},
+                    \#{name: '2', cmd: ''},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.scrollingWindowSize(1)
+                    \.build()
+                    \.showAtCursor()
+        call assert_true([] != filter(copy(s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList), {idx, val -> val == ['VmenuSelect', 0, 0, 5, 0]}))
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("j"))
+        call assert_equal("2", s:VMenuManager.__focusedWindow.getCurItem().name->trim())
+        call assert_true([] != filter(copy(s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList), {idx, val -> val == ['VmenuSelect', 0, 1, 5, 1]}))
+
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+    endif
+
+    " test scroll bar reaches the bottom when focusing last item
+    if 1
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: "test", subItemList:
+                    \ map(range(80),
+                    \  { idx, val
+                    \  -> #{
+                    \       name: val
+                    \      }
+                    \  })
+                    \},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.scrollingWindowSize(10)
+                    \.build()
+                    \.showAtCursor()
+        "call s:VMenuManager.startGettingUserInput()
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<CR>"))
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("G"))
+        call assert_equal(['VmenuScrollbar', 6, 79, 7, 79], s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList[0])
+
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+    endif
+
+    " show scrollbar when item size > scrollingWindowSize
+    if 1
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: '1', cmd: ''},
+                    \#{name: '2', cmd: ''},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.scrollingWindowSize(20)
+                    \.build()
+                    \.showAtCursor()
+        "call s:VMenuManager.startGettingUserInput()
+        call assert_equal(['VmenuSelect', 0, 0, 6, 0], s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList[0])
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: '0', cmd: ''},
+                    \#{name: '1', cmd: ''},
+                    \#{name: '2', cmd: ''},
+                    \#{name: '3', cmd: ''},
+                    \#{name: '4', cmd: ''},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.scrollingWindowSize(5)
+                    \.build()
+                    \.showAtCursor()
+        "call s:VMenuManager.startGettingUserInput()
+        call assert_equal(['VmenuSelect', 0, 0, 6, 0], s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList[0])
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: '0', cmd: ''},
+                    \#{name: '1', cmd: ''},
+                    \#{name: '2', cmd: ''},
+                    \#{name: '3', cmd: ''},
+                    \#{name: '4', cmd: ''},
+                    \#{name: '5', cmd: ''},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.scrollingWindowSize(5)
+                    \.build()
+                    \.showAtCursor()
+        "call s:VMenuManager.startGettingUserInput()
+        call assert_equal(['VmenuScrollbar', 5, 0, 6, 0], s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList[0])
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
