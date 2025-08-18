@@ -1275,11 +1275,19 @@ function! vmenu#appendTopMenu(name, vmenuItems)
     endif
 endfunction
 function! vmenu#openTopMenu()
+    if empty(s:VMenuManager.__allTopMenuItemList)
+        call s:printWarn("vmenu: top menu is empty!")
+        return
+    endif
+
     call s:TopMenuWindow.builder()
                 \.topMenuItemList(s:VMenuManager.__allTopMenuItemList)
                 \.build()
                 \.show()
     call s:VMenuManager.startGettingUserInput()
+endfunction
+function! vmenu#cleanTopMenu()
+    let s:VMenuManager.__allTopMenuItemList = []
 endfunction
 
 function! vmenu#itemTips()
