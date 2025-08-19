@@ -1,4 +1,5 @@
 show-ft	vmenu.txt	/*show-ft*
+vmenu#cleanTopMenu()	vmenu.txt	/*vmenu#cleanTopMenu()*
 vmenu#existFileType()	vmenu.txt	/*vmenu#existFileType()*
 vmenu#installTopMenu()	vmenu.txt	/*vmenu#installTopMenu()*
 vmenu#itemTips()	vmenu.txt	/*vmenu#itemTips()*
