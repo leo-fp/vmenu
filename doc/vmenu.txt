@@ -13,6 +13,7 @@ Version:	0.2.0
     3.5 vmenu#parse_context()...........................|vmenu#parse_context()|
     3.6 vmenu#existFileType()...........................|vmenu#existFileType()|
     3.7 vmenu#matchRegex().................................|vmenu#matchRegex()|
+    3.8 vmenu#cleanTopMenu().............................|vmenu#cleanTopMenu()|
 4. vmenu item field	.........................................|vmenu-item-field|
     4.1 show-ft.................................................|vmenu-show-ft|
     4.2 show-mode.............................................|vmenu-show-mode|
@@ -132,6 +133,10 @@ If you want vmenu item only appears when selected text matches the regex.
 
 regex: regex string.
 return: 1: match. 0: not match
+
+3.8 vmenu#cleanTopMenu()                                  *vmenu#cleanTopMenu()*
+----------------------------------------
+Clean installed top menu.
 
 ==============================================================================
 4. vmenu item field						                      *vmenu-item-field*
