@@ -335,7 +335,7 @@ function! s:ContextWindow.new(contextWindowBuilder)
     let contextWindow.winHeight = contextWindow.contextItemList->len()
     let contextWindow.scrollingWindowSize = min([a:contextWindowBuilder.__scrollingWindowSize, contextWindow.winHeight])
     let contextWindow.renderStartIdx = 0
-    let contextWindow.renderEndIdx = min([a:contextWindowBuilder.__scrollingWindowSize-1, contextWindow.winHeight])
+    let contextWindow.renderEndIdx = min([a:contextWindowBuilder.__scrollingWindowSize-1, contextWindow.winHeight-1])
     let contextWindow.__componentLength = contextWindow.contextItemList->len()
     let contextWindow.x = a:contextWindowBuilder.__x " column number
     let contextWindow.y = a:contextWindowBuilder.__y " line number
@@ -544,18 +544,14 @@ function! s:ContextWindow.__renderHighlight(offset)
         let self.renderEndIdx = a:offset + self.scrollingWindowSize - 1
     endif
 
-    for index in range(len(self.contextItemList))
-        if index < self.renderStartIdx || index > self.renderEndIdx
-            continue
-        endif
-
+    for index in range(self.renderStartIdx, self.renderEndIdx)
         let curItem = self.contextItemList[index]
         let curItem.syntaxRegionList = []
-        let needActiveScrollbar = self.scrollingWindowSize < self.contextItemList->len()
-        let endColumnNr = needActiveScrollbar ? win.opts.w - 1 : win.opts.w
+        let needActivateScrollbar = self.scrollingWindowSize < self.contextItemList->len()
+        let endColumnNr = needActivateScrollbar ? win.opts.w - 1 : win.opts.w
 
         " scrollbar
-        if needActiveScrollbar == 1
+        if needActivateScrollbar == 1
             let scrollbarOffset = (self.scrollingWindowSize - scrollbarHeight) * self.renderStartIdx / (self.contextItemList->len() - self.scrollingWindowSize)
             let scrollbarStartIdx = self.renderStartIdx + scrollbarOffset
             if scrollbarStartIdx <= index && index < scrollbarStartIdx + scrollbarHeight
