@@ -432,8 +432,9 @@ function! s:ContextWindow.getClickedItemIndex(mousePos)
     call self.__logger.info("clickedPos:" .. string(clickedPos))
     call self.__logger.info("topLeftCorner:" .. string(topLeftCorner))
     if (topLeftCorner.x <= clickedPos.x && clickedPos.x <= topLeftCorner.x + self.winWidth) &&
-                \ (topLeftCorner.y <= clickedPos.y && clickedPos.y <= topLeftCorner.y + self.winHeight)
-        return clickedPos.y - topLeftCorner.y
+                \ (topLeftCorner.y <= clickedPos.y && clickedPos.y < topLeftCorner.y + self.scrollingWindowSize)
+        " plus self.renderStartIdx to correct index if scrollbar is activated
+        return clickedPos.y - topLeftCorner.y + self.renderStartIdx
     endif
 
     return -1
@@ -2452,6 +2453,47 @@ if 0
         "call s:VMenuManager.startGettingUserInput()
         call assert_equal(['VmenuScrollbar', 5, 0, 6, 0], s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList[0])
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
+    endif
+
+    " mouse clicking will get right index when scrollbar is activated
+    if 1
+        let s:testList = []
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: '0', cmd: 'call vmenu#testEcho(0)'},
+                    \#{name: '1', cmd: 'call vmenu#testEcho(1)'},
+                    \#{name: '2', cmd: 'call vmenu#testEcho(2)'},
+                    \#{name: '3', cmd: 'call vmenu#testEcho(3)'},
+                    \#{name: '4', cmd: 'call vmenu#testEcho(4)'},
+                    \#{name: '5', cmd: 'call vmenu#testEcho(5)'},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.scrollingWindowSize(5)
+                    \.build()
+                    \.showAtCursor()
+        "call s:VMenuManager.startGettingUserInput()
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("G"))
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<LeftMouse>", s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow, 0, 0)))
+        call assert_true(index(s:testList, 1) != -1)
+    endif
+
+    " click below the scrolling widnow will close all windows
+    if 1
+        let s:testList = []
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: '0', cmd: ''},
+                    \#{name: '1', cmd: ''},
+                    \#{name: '2', cmd: ''},
+                    \#{name: '3', cmd: ''},
+                    \#{name: '4', cmd: ''},
+                    \#{name: '5', subItemList: [#{name: '5.1', cmd: ''}]},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.scrollingWindowSize(5)
+                    \.build()
+                    \.showAtCursor()
+        "call s:VMenuManager.startGettingUserInput()
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<LeftMouse>", s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow, 0, 5)))
+        call assert_equal(0, s:VMenuManager.__focusedWindow.isOpen)
     endif
 
     call s:showErrors()
