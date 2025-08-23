@@ -394,7 +394,7 @@ function! s:ContextWindow.showAt(x, y)
     endif
 
     let opts = {}
-    let text = self.__render(0, self.renderEndIdx)
+    let text = self.__renderText(0, self.renderEndIdx)
     let opts.h = self.scrollingWindowSize
     let opts.w = self.winWidth
     let opts.color = "VmenuBg"
@@ -529,7 +529,7 @@ function! s:ContextWindow.__executeCmdField(fieldName="cmd")
         call self.__logger.info(printf("winId: %s, execute cmd(func): %s", self.winId, CmdField))
     endif
 endfunction
-function! s:ContextWindow.__render(start, end)
+function! s:ContextWindow.__renderText(start, end)
     return reduce(self.contextItemList[a:start:a:end], { acc, val -> add(acc, val.name) }, [])
 endfunction
 function! s:ContextWindow.__renderHighlight(offset)
@@ -556,7 +556,7 @@ function! s:ContextWindow.__renderHighlight(offset)
             let scrollbarOffset = (self.scrollingWindowSize - scrollbarHeight) * self.renderStartIdx / (self.contextItemList->len() - self.scrollingWindowSize)
             let scrollbarStartIdx = self.renderStartIdx + scrollbarOffset
             if scrollbarStartIdx <= index && index < scrollbarStartIdx + scrollbarHeight
-                call add(curItem.syntaxRegionList, ["VmenuScrollbar", win.opts.w-1, index, win.opts.w, index])
+                call add(curItem.syntaxRegionList, ["VmenuScrollbar", win.opts.w-1, win.opts.w])
             endif
             call self.__logger.info("index: " .. index
                         \ .. ", renderStartIdx: " .. self.renderStartIdx
@@ -567,11 +567,11 @@ function! s:ContextWindow.__renderHighlight(offset)
         " inactive item
         if curItem.isInactive(self.__editorStatusSupplier()) == 1
             if curItem.hotKeyPos == -1
-                call add(curItem.syntaxRegionList, ["VmenuInactive", 0, index, endColumnNr, index])
+                call add(curItem.syntaxRegionList, ["VmenuInactive", 0, endColumnNr])
             else
-                call add(curItem.syntaxRegionList, ["VmenuInactive", 0, index, curItem.hotKeyPos, index])
-                call add(curItem.syntaxRegionList, ["VmenuInactiveHotKey", curItem.hotKeyPos, index, curItem.hotKeyPos+1, index])
-                call add(curItem.syntaxRegionList, ["VmenuInactive", curItem.hotKeyPos+1, index, endColumnNr, index])
+                call add(curItem.syntaxRegionList, ["VmenuInactive", 0, curItem.hotKeyPos])
+                call add(curItem.syntaxRegionList, ["VmenuInactiveHotKey", curItem.hotKeyPos, curItem.hotKeyPos+1])
+                call add(curItem.syntaxRegionList, ["VmenuInactive", curItem.hotKeyPos+1, endColumnNr])
             endif
 
             continue
@@ -580,33 +580,33 @@ function! s:ContextWindow.__renderHighlight(offset)
         " focused item
         if index == a:offset
             if curItem.hotKeyPos == -1
-                call add(curItem.syntaxRegionList, ["VmenuSelect", 0, index, endColumnNr, index])
+                call add(curItem.syntaxRegionList, ["VmenuSelect", 0, endColumnNr])
             else
-                call add(curItem.syntaxRegionList, ["VmenuSelect", 0, index, curItem.hotKeyPos, index])
-                call add(curItem.syntaxRegionList, ["VmenuSelectedHotkey", curItem.hotKeyPos, index, curItem.hotKeyPos+1, index])
-                call add(curItem.syntaxRegionList, ["VmenuSelect", curItem.hotKeyPos+1, index, endColumnNr, index])
+                call add(curItem.syntaxRegionList, ["VmenuSelect", 0, curItem.hotKeyPos])
+                call add(curItem.syntaxRegionList, ["VmenuSelectedHotkey", curItem.hotKeyPos, curItem.hotKeyPos+1])
+                call add(curItem.syntaxRegionList, ["VmenuSelect", curItem.hotKeyPos+1, endColumnNr])
             endif
 
             continue
         endif
 
         " hot key
-        call add(curItem.syntaxRegionList, ["VmenuHotkey1", curItem.hotKeyPos, index, curItem.hotKeyPos + 1, index])
+        call add(curItem.syntaxRegionList, ["VmenuHotkey1", curItem.hotKeyPos, curItem.hotKeyPos + 1])
 
         " seperator line
         if curItem.isSep == 1
-            call add(curItem.syntaxRegionList, ["VmenuSepLine", 0, index, endColumnNr, index])
+            call add(curItem.syntaxRegionList, ["VmenuSepLine", 0, endColumnNr])
         endif
 
         " desc
         if curItem.descPos != -1
-            call add(curItem.syntaxRegionList, ["VmenuDesc", curItem.descPos, index, curItem.descPos + curItem.descWidth, index])
+            call add(curItem.syntaxRegionList, ["VmenuDesc", curItem.descPos, curItem.descPos + curItem.descWidth])
         endif
 
     endfor
 
     " refresh content in the scrolling window
-    let textList = self.__render(self.renderStartIdx, self.renderEndIdx)
+    let textList = self.__renderText(self.renderStartIdx, self.renderEndIdx)
     call win.set_text(textList)
 
     " do render
@@ -614,7 +614,7 @@ function! s:ContextWindow.__renderHighlight(offset)
     call win.syntax_begin(1)
     for index in range(len(visibleItems))
         for syntax in visibleItems[index].syntaxRegionList
-            call win.syntax_region(syntax[0], syntax[1], syntax[2]-self.renderStartIdx, syntax[3], syntax[4]-self.renderStartIdx)
+            call win.syntax_region(syntax[0], syntax[1], index, syntax[2], index)
         endfor
     endfor
 
@@ -644,7 +644,7 @@ function! s:ContextItem.new(dict)
     let contextItem.descPos         = get(a:dict, 'descPos', -1)     " offset of shortKey
     let contextItem.descWidth       = get(a:dict, 'descWidth', 0)    " length of shortKey
     let contextItem.stretchingIndex = -1    " the index for stretching. used for minWidth
-    let contextItem.syntaxRegionList       = [] " [[highlight, start column number (inclusive), start line number, end column number(exclusive), end line number]]
+    let contextItem.syntaxRegionList       = [] " [[highlight, start (inclusive), end (exclusive)]]
     let contextItem.itemVersion     = get(a:dict, 'itemVersion', 0)  " context item version. see: g:VMENU#ITEM_VERSION
     let contextItem.group           = get(a:dict, 'group', '')  " group name of current item
     return contextItem
@@ -741,7 +741,7 @@ function! s:TopMenuWindow.getCurItem()
 endfunction
 function! s:TopMenuWindow.show()
     let opts = {}
-    let text = self.__render()
+    let text = self.__renderText()
     let opts.h = 1
     let opts.w = self.winWidth
     let opts.color = "VmenuBg"
@@ -791,7 +791,7 @@ function! s:TopMenuWindow.__getStartColumnNrByIndex(index)
     return a:index == 0 ? 0
                 \: reduce(self.topMenuItemList[:a:index-1], { acc, val -> acc + strcharlen(val.name) }, 0)
 endfunction
-function! s:TopMenuWindow.__render()
+function! s:TopMenuWindow.__renderText()
     return reduce(self.topMenuItemList, { acc, val -> acc .. val.name }, '')
 endfunction
 " rendering focused line, hot key, inactive line
@@ -812,17 +812,17 @@ function! s:TopMenuWindow.__renderHighlight(offset)
     let item = self.topMenuItemList[a:offset]
     if self.topMenuItemList[a:offset].hotKeyPos == -1
         let startX = self.__getStartColumnNrByIndex(self.__curItemIndex)
-        call add(syntaxRegionList, ['VmenuSelect', startX, 0, startX + strcharlen(self.getCurItem().name), 0])
+        call add(syntaxRegionList, ['VmenuSelect', startX, startX + strcharlen(self.getCurItem().name)])
     else
         let startX = self.__getStartColumnNrByIndex(self.__curItemIndex) " start position in whole top menu window
         let endX = startX + item.hotKeyPos
-        call add(syntaxRegionList, ['VmenuSelect', startX, 0, endX, 0])
-        call add(syntaxRegionList, ["VmenuSelectedHotkey", endX, 0, endX+1, 0])
-        call add(syntaxRegionList, ["VmenuSelect", endX+1, 0, startX+strcharlen(item.name), 0])
+        call add(syntaxRegionList, ['VmenuSelect', startX, endX])
+        call add(syntaxRegionList, ["VmenuSelectedHotkey", endX, endX+1])
+        call add(syntaxRegionList, ["VmenuSelect", endX+1, startX+strcharlen(item.name)])
     endif
     let item.syntaxRegionList = deepcopy(syntaxRegionList, 1)
     for syntax in syntaxRegionList
-        call win.syntax_region(syntax[0], syntax[1], syntax[2], syntax[3], syntax[4])
+        call win.syntax_region(syntax[0], syntax[1], 0, syntax[2], 0)
     endfor
     call win.syntax_end()
 endfunction
@@ -1689,7 +1689,7 @@ if 0
                     \.showAtCursor()
         let item = s:VMenuManager.__focusedWindow.getCurItem()
         call assert_equal(1, item.syntaxRegionList->len())
-        call assert_equal(['VmenuSelect', 0, 0, 7, 0], item.syntaxRegionList[0])
+        call assert_equal(['VmenuSelect', 0, 7], item.syntaxRegionList[0])
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
@@ -1702,9 +1702,9 @@ if 0
                     \.build()
                     \.showAtCursor()
         let item = s:VMenuManager.__focusedWindow.getCurItem()
-        call assert_equal(['VmenuSelect', 0, 0, 3, 0], item.syntaxRegionList[0])
-        call assert_equal(['VmenuSelectedHotkey', 3, 0, 4, 0], item.syntaxRegionList[1])
-        call assert_equal(['VmenuSelect', 4, 0, 7, 0], item.syntaxRegionList[2])
+        call assert_equal(['VmenuSelect', 0, 3], item.syntaxRegionList[0])
+        call assert_equal(['VmenuSelectedHotkey', 3, 4], item.syntaxRegionList[1])
+        call assert_equal(['VmenuSelect', 4, 7], item.syntaxRegionList[2])
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
@@ -1718,9 +1718,9 @@ if 0
                     \.build()
                     \.showAtCursor()
         let item = s:VMenuManager.__focusedWindow.contextItemList[1]
-        call assert_equal(['VmenuInactive', 0, 1, 3, 1], item.syntaxRegionList[0])
-        call assert_equal(['VmenuInactiveHotKey', 3, 1, 4, 1], item.syntaxRegionList[1])
-        call assert_equal(['VmenuInactive', 4, 1, 6, 1], item.syntaxRegionList[2])
+        call assert_equal(['VmenuInactive', 0, 3], item.syntaxRegionList[0])
+        call assert_equal(['VmenuInactiveHotKey', 3, 4], item.syntaxRegionList[1])
+        call assert_equal(['VmenuInactive', 4, 6], item.syntaxRegionList[2])
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
@@ -1751,7 +1751,7 @@ if 0
                     \.showAtCursor()
         let item = s:VMenuManager.__focusedWindow.contextItemList[1]
         call assert_equal("2", item.name[item.descPos:item.descPos+item.descWidth-1])
-        call assert_equal(['VmenuDesc', 8, 1, 9, 1], item.syntaxRegionList[1])
+        call assert_equal(['VmenuDesc', 8, 9], item.syntaxRegionList[1])
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
@@ -2376,10 +2376,10 @@ if 0
                     \.scrollingWindowSize(1)
                     \.build()
                     \.showAtCursor()
-        call assert_true([] != filter(copy(s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList), {idx, val -> val == ['VmenuSelect', 0, 0, 5, 0]}))
+        call assert_true([] != filter(copy(s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList), {idx, val -> val == ['VmenuSelect', 0, 5]}))
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("j"))
         call assert_equal("2", s:VMenuManager.__focusedWindow.getCurItem().name->trim())
-        call assert_true([] != filter(copy(s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList), {idx, val -> val == ['VmenuSelect', 0, 1, 5, 1]}))
+        call assert_true([] != filter(copy(s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList), {idx, val -> val == ['VmenuSelect', 0, 5]}))
 
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
@@ -2403,7 +2403,7 @@ if 0
         "call s:VMenuManager.startGettingUserInput()
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<CR>"))
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("G"))
-        call assert_equal(['VmenuScrollbar', 6, 79, 7, 79], s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList[0])
+        call assert_equal(['VmenuScrollbar', 6, 7], s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList[0])
 
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
@@ -2420,7 +2420,7 @@ if 0
                     \.build()
                     \.showAtCursor()
         "call s:VMenuManager.startGettingUserInput()
-        call assert_equal(['VmenuSelect', 0, 0, 6, 0], s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList[0])
+        call assert_equal(['VmenuSelect', 0, 6], s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList[0])
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
 
         call s:ContextWindow.builder()
@@ -2435,7 +2435,7 @@ if 0
                     \.build()
                     \.showAtCursor()
         "call s:VMenuManager.startGettingUserInput()
-        call assert_equal(['VmenuSelect', 0, 0, 6, 0], s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList[0])
+        call assert_equal(['VmenuSelect', 0, 6], s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList[0])
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
 
         call s:ContextWindow.builder()
@@ -2451,7 +2451,7 @@ if 0
                     \.build()
                     \.showAtCursor()
         "call s:VMenuManager.startGettingUserInput()
-        call assert_equal(['VmenuScrollbar', 5, 0, 6, 0], s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList[0])
+        call assert_equal(['VmenuScrollbar', 5, 6], s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList[0])
         call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
     endif
 
