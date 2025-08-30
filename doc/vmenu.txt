@@ -31,6 +31,7 @@ Version:	0.2.0
 6. global variables....................................|vmenu-global-variables|
     6.1 g:vmenu_enable_log.............................|vmenu-vmenu_enable_log|
     6.2 g:vmenu_enable_echo_tips.......................|vmenu_enable_echo_tips|
+    6.3 g:vmenu_enable_mouse_hover...................|vmenu_enable_mouse_hover|
 7. vmenu Changelog............................................|vmenu-changelog|
 
 ==============================================================================
@@ -294,9 +295,21 @@ Check message-history:
 6.2 vmenu_enable_echo_tips                              *vmenu_enable_echo_tips*
 ----------------------------------------
 Print item tips to command line or not. Enable by default.
-If you want to enable it.
+If you want to disable it.
 >
     :let g:vmenu_enable_echo_tips = 0
+
+
+6.3 vmenu_enable_mouse_hover                          *vmenu_enable_mouse_hover*
+----------------------------------------
+If enabled, the plugin will respond to mouse hover events like modern IDE.
+Disabled by default. If you want to enable it.
+>
+    :set mousemoveevent
+    :let g:vmenu_enable_mouse_hover = 1
+
+    NOTE: If this feature is enabled, the plugin will use polling method to
+    obtain user input, which will result in more CPU consumption.
 
 
 ==============================================================================
