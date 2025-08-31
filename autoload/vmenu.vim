@@ -309,15 +309,12 @@ endfunction
 function! s:VmenuWindow.__expand()
 endfunction
 
-function! s:VmenuWindow.handleUserInput(inputEvent, doAfterKeyStroke={ contextWindow -> '' })
+function! s:VmenuWindow.handleUserInput(inputEvent)
     if self.__delayTime != 0
         execute self.__delayTime .. 'sleep'
     endif
 
     call get(self.__actionMap, a:inputEvent.char, { -> { -> ''}})(a:inputEvent)()
-
-    " TODO: delete this
-    call a:doAfterKeyStroke(deepcopy(self))
 endfunction
 
 "-------------------------------------------------------------------------------
@@ -383,7 +380,6 @@ function! s:ContextWindow.new(contextWindowBuilder)
     endfor
 
     let contextWindow.__curItemIndex = -1
-    let contextWindow.__subContextWindowOpen = 0
     let contextWindow.__traceId = a:contextWindowBuilder.__traceId
     let contextWindow.__errConsumer = a:contextWindowBuilder.__errConsumer
     let contextWindow.__editorStatusSupplier = a:contextWindowBuilder.__editorStatusSupplier
@@ -524,7 +520,6 @@ function! s:ContextWindow.enter()
     if (!subItemList->empty())
         let subWindow = self.__expand()
         call subWindow.__focusFirstMatch(range(subWindow.__componentLength))
-        let self.__subContextWindowOpen = 1
     else
         call self.__execute()
     endif
@@ -758,7 +753,6 @@ function! s:TopMenuWindow.new(topMenuWindowBuilder)
     endfor
 
     let topMenuWindow.__curItemIndex = 0
-    let topMenuWindow.__subContextWindowOpen = 0
     let topMenuWindow.__padding = 2 " spaces added on the left and right side for every item
     let topMenuWindow.__delayTime = a:topMenuWindowBuilder.__delayTime
     let topMenuWindow.__traceId = a:topMenuWindowBuilder.__traceId
@@ -838,7 +832,6 @@ function! s:TopMenuWindow.__expand()
     catch "NoVisibleItemException"
         return
     endtry
-    let self.__subContextWindowOpen = 1
     let self.subVmenuWindow = subContextWindow
     call self.subVmenuWindow.__renderHighlight(-1)
     return subContextWindow
@@ -1617,28 +1610,30 @@ if 0
 
     " when cmd is executed, close all context window
     if 1
-        call s:ContextWindow.builder()
+        let window = s:ContextWindow.builder()
                     \.contextItemList(s:VMenuManager.parseContextItem([
                     \["first menu", 'call quickui#context#expand([["second menu", "echo 1"]])']
                     \]))
                     \.build()
                     \.showAtCursor()
-        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<CR>"), { contextWindow -> assert_equal(1, contextWindow.isOpen) })
-        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<CR>"), { contextWindow -> assert_true(contextWindow.isOpen == 0 && contextWindow.parentVmenuWindow.isOpen == 0) })
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<CR>"))
+        call assert_equal(1, window.isOpen)
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<CR>"))
+        call assert_equal(0, window.isOpen)
     endif
 
     " execute cmd by hotkey
     if 1
         let msg = rand(srand())
-        call s:ContextWindow.builder()
+        let window = s:ContextWindow.builder()
                     \.contextItemList(s:VMenuManager.parseContextItem([
                     \["&Hi", 'call vmenu#testEcho(' .. msg .. ')']
                     \]))
                     \.build()
                     \.showAtCursor()
-        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("h"), { contextWindow -> assert_equal(0, contextWindow.isOpen) })
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("h"))
+        call assert_equal(0, window.isOpen)
         call assert_true(index(s:testList, msg) != -1)
-        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("\<ESC>"))
 
         " expand by hotkey
         call s:ContextWindow.builder()
@@ -1661,14 +1656,17 @@ if 0
     if 1
         let msg = rand(srand())
         let secondMenuCmd = 'call vmenu#testEcho(' .. msg .. ')'
-        call s:ContextWindow.builder()
+        let window = s:ContextWindow.builder()
                     \.contextItemList(s:VMenuManager.parseContextItem([
                     \["&first menu 1449874988", 'call quickui#context#expand([["&second menu", "' .. secondMenuCmd .. '"]])']
                     \]))
                     \.build()
                     \.showAtCursor()
-        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("f"), { contextWindow -> assert_true(contextWindow.isOpen == 1 && contextWindow.__subContextWindowOpen == 1) })
-        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("s"), { contextWindow -> assert_true(contextWindow.isOpen == 0 && contextWindow.__subContextWindowOpen == 0) })
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("f"))
+        call assert_equal(1, window.subVmenuWindow.isOpen)
+        call s:VMenuManager.__focusedWindow.handleUserInput(s:InputEvent.new("s"))
+        call assert_equal(0, window.subVmenuWindow.isOpen)
+        call assert_equal(0, window.isOpen)
         call assert_true(index(s:testList, msg) != -1)
     endif
 
