@@ -1048,10 +1048,10 @@ function! s:VMenuManager.mouseHoverEnabledListen()
     let self.__keepGettingInput = 1
     while self.__keepGettingInput
         if getchar(1) == 0
+            sleep 40m
             continue
         endif
 
-        sleep 40m
         let code = getchar(0)
 
         let ch = (type(code) == v:t_number)? nr2char(code) : code
