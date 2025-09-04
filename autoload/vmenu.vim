@@ -292,7 +292,6 @@ function! s:VmenuWindow.close(closeCode, event={})
     endif
 
     call self.quickuiWindow.close()
-    call s:VMenuManager.removeWindow(self)
     let self.isOpen = 0
     call self.__logger.info("winid: " .. self.winId .. " closed")
     if has_key(self, 'parentVmenuWindow') && !empty(self.parentVmenuWindow)
@@ -331,7 +330,18 @@ endfunction
 
 function! s:VmenuWindow.__onMouseHover(event)
     let itemIdxAtMousePos = self.getClickedItemIndex(a:event.mousepos)
-    if itemIdxAtMousePos == -1 || (itemIdxAtMousePos == self.__curItemIndex && !empty(self.subVmenuWindow) && self.subVmenuWindow.isOpen == 1)
+
+    " not in current window. pass it to parent window
+    if itemIdxAtMousePos == -1 && !empty(self.parentVmenuWindow)
+        call self.parentVmenuWindow.handleEvent(a:event)
+        return
+    endif
+    if itemIdxAtMousePos == -1
+        return
+    endif
+
+    " only execute once at same item
+    if itemIdxAtMousePos == self.__curItemIndex && !empty(self.subVmenuWindow,) && get(self.subVmenuWindow, "isOpen", 0) == 1
         return
     endif
 
@@ -493,7 +503,6 @@ function! s:ContextWindow.showAt(x, y)
 
     call self.__logger.info(printf("ContextWindow opened at x:%s, y:%s, vmenu winId: %s,
                 \ quickui winId: %s", self.x, self.y, self.winId, self.quickuiWindow.winid))
-    call s:VMenuManager.saveVmenuWindow(self)
     return self
 endfunction
 function! s:ContextWindow.showAtCursor()
@@ -843,7 +852,6 @@ function! s:TopMenuWindow.show()
     redraw
     let self.isOpen = 1
     call s:VMenuManager.setFocusedWindow(self)
-    call s:VMenuManager.saveVmenuWindow(self)
     call self.focusItemByIndex(self.__curItemIndex)
     call self.__logger.info(printf("TopMenuWindow opened at x:%s, y:%s, winId: %s", opts.x, opts.y, self.winId))
     return self
@@ -971,7 +979,6 @@ let s:VMenuManager = {}
 let s:VMenuManager.__allTopMenuItemList = []
 let s:VMenuManager.__focusedWindow = {}
 let s:VMenuManager.__keepGettingInput = 0
-let s:VMenuManager.__openingVmenuWindowList = []
 function! s:VMenuManager.parseContextItem(userItemList, itemVersion=g:VMENU#ITEM_VERSION.QUICKUI)
     let s:VMenuManager.__allContextItemList = []
 
@@ -1058,13 +1065,7 @@ function! s:VMenuManager.mouseHoverEnabledListen()
             let event = s:KeyStrokeEvent.new(ch)
         endif
 
-        if event.key == "VMENU_MOUSE_HOVER"
-            for win in self.__openingVmenuWindowList
-                call win.handleEvent(event)
-            endfor
-        else
-            call self.__focusedWindow.handleEvent(event)
-        endif
+        call self.__focusedWindow.handleEvent(event)
     endwhile
 endfunction
 
@@ -1076,19 +1077,6 @@ endfunction
 function! s:VMenuManager.setFocusedWindow(contextWindow)
     let self.__focusedWindow = a:contextWindow
     call s:Log.simpleLog("set focused window: " .. a:contextWindow.winId)
-endfunction
-
-function! s:VMenuManager.saveVmenuWindow(contextWindow)
-    call add(self.__openingVmenuWindowList, a:contextWindow)
-    call s:Log.simpleLog("save vmenu window. winid: " .. a:contextWindow.winId
-                \.. ". saved window size: " .. self.__openingVmenuWindowList->len())
-endfunction
-
-function! s:VMenuManager.removeWindow(contextWindow)
-    let winIdx = indexof(self.__openingVmenuWindowList, {i, v -> v.winId == a:contextWindow.winId})
-    if winIdx != -1
-        call remove(self.__openingVmenuWindowList, winIdx)
-    endif
 endfunction
 
 " top left position (inclusive) of vmenu window
@@ -2746,7 +2734,6 @@ if 0
 
     " (context menu) parent window can respond to mouse hover event even if sub menu is opening
     if 1
-        let s:VMenuManager.__openingVmenuWindowList = []
         let window = s:ContextWindow.builder()
                     \.contextItemList(s:VMenuManager.parseContextItem([
                     \#{name: '0', subItemList: [#{name: "0.1", cmd: '', subItemList: [#{name: '0.1.1', cmd: ''}]}]},
@@ -2766,12 +2753,10 @@ if 0
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
-        call assert_equal(0, s:VMenuManager.__openingVmenuWindowList->len())
     endif
 
     " (top menu) top menu can respond to mouse hover event even if sub menu is opening
     if 1
-        let s:VMenuManager.__openingVmenuWindowList = []
         call vmenu#cleanTopMenu()
         call s:VMenuManager.initTopMenuItems('1', vmenu#parse_context([
                     \#{name: '1.1', cmd: '', subItemList: [#{name: '1.1.1', cmd: ''}]},
@@ -2794,7 +2779,6 @@ if 0
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
-        call assert_equal(0, s:VMenuManager.__openingVmenuWindowList->len())
     endif
 
     " (context menu) context menu should not close if mouse hover event occured outside the window
