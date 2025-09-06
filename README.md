@@ -18,12 +18,27 @@ just have some ideas want to try, start over seems easier and tempting
 * menu and context menu already exist in my config should work as well
 * provide an enhanced context item (vmenu item) that you can control whether to show or active dynamically
 * nice default looking (I ported one from IntelliJ IDEA since I'm not good at it)
-### 0.3.0 NEXT
-* mouse support
-* better looking
 
-### 0.4.0
-* an always opening top menu
+---
+
+### 0.3.0
+#### features:
+* mouse support (click, hover)
+* new api "vmenu#cleanTopMenu"
+* show a non-interactive scrollbar when items number exceeds 20
+* new vmenu item "onFocus"
+* expose name field to funcref type cmd
+* cmd field can be defined as Funcref
+* new vmenu item field "group"
+* add a build-in function "vmenu#matchRegex" to work with show-if or deactive-if
+* vim-quickui item and vmenu item can be mixed.
+* add a build-in function(vmenu#existFileType) to work with show-if or deactive-if
+* echo context item tips in command line by default. can be disabled by setting g:vmenu_enable_echo_tips=0
+
+---
+
+### 0.4.0 NEXT
+- [ ] an always opening top menu
 
 ## NOTE
 * This plugin may changes radically, use with caution
@@ -155,12 +170,11 @@ call vmenu#openContextWindow(vmenu#parse_context([
 * if you want a more flexible way to control vmenu item show status or deactive status, you can
 define a function to `show-if` or `deactive-if` field. for more details, check `:h vmenu`
 
-## changelog
-* 0.2.0: first releases
-
 ## related projects
 [vim-quickui](https://github.com/skywind3000/vim-quickui)
+
 [which-key.nvim](https://github.com/folke/which-key.nvim)
+
 [menu](https://github.com/nvzone/menu)
 
 ## known problem

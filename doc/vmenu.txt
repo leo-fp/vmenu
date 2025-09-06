@@ -1,7 +1,7 @@
 *vmenu.txt*
 
 Author:		leo-fp
-Version:	0.2.0
+Version:	0.3.0
 
 1. Introduction...................................................|vmenu-intro|
 2. Installation............................................|vmenu-installation|
@@ -307,9 +307,6 @@ Disabled by default. If you want to enable it.
 >
     :set mousemoveevent
     :let g:vmenu_enable_mouse_hover = 1
-
-    NOTE: If this feature is enabled, the plugin will use polling method to
-    obtain user input, which will result in more CPU consumption.
 
 
 ==============================================================================
