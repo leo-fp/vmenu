@@ -1018,7 +1018,7 @@ function! s:VMenuManager.parseUserDefinedItemList(userItemList)
     return itemList
 endfunction
 
-function! s:VMenuManager.startGettingUserInput()
+function! s:VMenuManager.startListening()
     if s:enable_mouse_hover
         call self.mouseHoverEnabledListen()
     else
@@ -1386,7 +1386,7 @@ function! vmenu#openContextWindow(content, opts)
     try
         call contextWindowBuilder.build()
                     \.showAtCursor()
-        call s:VMenuManager.startGettingUserInput()
+        call s:VMenuManager.startListening()
     catch "NoVisibleItemException"
         return
     endtry
@@ -1420,7 +1420,7 @@ function! vmenu#openTopMenu()
                 \.topMenuItemList(s:VMenuManager.__allTopMenuItemList)
                 \.build()
                 \.show()
-    call s:VMenuManager.startGettingUserInput()
+    call s:VMenuManager.startListening()
 endfunction
 function! vmenu#cleanTopMenu()
     let s:VMenuManager.__allTopMenuItemList = []
@@ -1679,7 +1679,7 @@ if 0
                     \.traceId("xxx")
                     \.build()
                     \.showAtCursor()
-        "call s:VMenuManager.startGettingUserInput()
+        "call s:VMenuManager.startListening()
         call assert_equal(2, s:VMenuManager.__focusedWindow.contextItemList->len())
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("a"))
         call assert_equal("1.1", s:VMenuManager.__focusedWindow.getCurItem().name->trim())
@@ -2253,7 +2253,7 @@ if 0
                     \.topMenuItemList(s:VMenuManager.__allTopMenuItemList)
                     \.build()
                     \.show()
-        "call s:VMenuManager.startGettingUserInput()
+        "call s:VMenuManager.startListening()
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<CR>"))
         call assert_equal("Test-empty-sub-menu", s:VMenuManager.__focusedWindow.getCurItem().name->trim())
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
@@ -2544,7 +2544,7 @@ if 0
                     \.scrollingWindowSize(10)
                     \.build()
                     \.showAtCursor()
-        "call s:VMenuManager.startGettingUserInput()
+        "call s:VMenuManager.startListening()
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<CR>"))
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("G"))
         call assert_equal(['VmenuScrollbar', 6, 7], s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList[0])
@@ -2563,7 +2563,7 @@ if 0
                     \.scrollingWindowSize(20)
                     \.build()
                     \.showAtCursor()
-        "call s:VMenuManager.startGettingUserInput()
+        "call s:VMenuManager.startListening()
         call assert_equal(['VmenuSelect', 0, 6], s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList[0])
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
 
@@ -2578,7 +2578,7 @@ if 0
                     \.scrollingWindowSize(5)
                     \.build()
                     \.showAtCursor()
-        "call s:VMenuManager.startGettingUserInput()
+        "call s:VMenuManager.startListening()
         call assert_equal(['VmenuSelect', 0, 6], s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList[0])
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
 
@@ -2594,7 +2594,7 @@ if 0
                     \.scrollingWindowSize(5)
                     \.build()
                     \.showAtCursor()
-        "call s:VMenuManager.startGettingUserInput()
+        "call s:VMenuManager.startListening()
         call assert_equal(['VmenuScrollbar', 5, 6], s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList[0])
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
     endif
@@ -2614,7 +2614,7 @@ if 0
                     \.scrollingWindowSize(5)
                     \.build()
                     \.showAtCursor()
-        "call s:VMenuManager.startGettingUserInput()
+        "call s:VMenuManager.startListening()
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("G"))
         call s:VMenuManager.__focusedWindow.handleEvent(s:MouseClickEvent.new(s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow, 0, 0)))
         call assert_true(index(s:testList, 1) != -1)
@@ -2635,7 +2635,7 @@ if 0
                     \.scrollingWindowSize(5)
                     \.build()
                     \.showAtCursor()
-        "call s:VMenuManager.startGettingUserInput()
+        "call s:VMenuManager.startListening()
         call s:VMenuManager.__focusedWindow.handleEvent(s:MouseClickEvent.new(s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow, 0, 5)))
         call assert_equal(0, s:VMenuManager.__focusedWindow.isOpen)
     endif
@@ -2650,7 +2650,7 @@ if 0
                     \.scrollingWindowSize(5)
                     \.build()
                     \.showAtCursor()
-        "call s:VMenuManager.startGettingUserInput()
+        "call s:VMenuManager.startListening()
         call s:VMenuManager.__focusedWindow.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow, 0, 1)))
         call assert_equal("1", s:VMenuManager.__focusedWindow.getCurItem().name->trim())
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
@@ -2687,7 +2687,7 @@ if 0
                     \.scrollingWindowSize(5)
                     \.build()
                     \.showAtCursor()
-        "call s:VMenuManager.startGettingUserInput()
+        "call s:VMenuManager.startListening()
         call s:VMenuManager.__focusedWindow.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow, 0, 1)))
         call assert_equal(1, s:VMenuManager.__focusedWindow.contextItemList->len()) " focus sub window
         call assert_equal(-1, s:VMenuManager.__focusedWindow.__curItemIndex)
@@ -2726,7 +2726,7 @@ if 0
                     \.scrollingWindowSize(5)
                     \.build()
                     \.showAtCursor()
-        "call s:VMenuManager.startGettingUserInput()
+        "call s:VMenuManager.startListening()
         call s:VMenuManager.__focusedWindow.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow, 0, 1)))
         call assert_equal("0", s:VMenuManager.__focusedWindow.getCurItem().name->trim())
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
@@ -2741,7 +2741,7 @@ if 0
                     \], g:VMENU#ITEM_VERSION.VMENU))
                     \.build()
                     \.showAtCursor()
-        "call s:VMenuManager.startGettingUserInput()
+        "call s:VMenuManager.startListening()
         call window.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(window, 0, 0)))
         call assert_equal("0.1", s:VMenuManager.__focusedWindow.getCurItem().name->trim())
         call assert_equal(1, s:VMenuManager.__focusedWindow.contextItemList->len()) " focus sub window
@@ -2768,7 +2768,7 @@ if 0
                     \.topMenuItemList(s:VMenuManager.__allTopMenuItemList)
                     \.build()
                     \.show()
-        "call s:VMenuManager.startGettingUserInput()
+        "call s:VMenuManager.startListening()
         call window.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(window, 0, 0)))
         call assert_equal("1.1", s:VMenuManager.__focusedWindow.getCurItem().name->trim())
         call assert_equal(-1, s:VMenuManager.__focusedWindow.__curItemIndex)
@@ -2791,7 +2791,7 @@ if 0
                     \.scrollingWindowSize(5)
                     \.build()
                     \.showAtCursor()
-        "call s:VMenuManager.startGettingUserInput()
+        "call s:VMenuManager.startListening()
         call s:VMenuManager.__focusedWindow.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow, -1, -1)))
         call assert_equal(1, s:VMenuManager.__focusedWindow.isOpen)
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
@@ -2806,7 +2806,7 @@ if 0
                     \.scrollingWindowSize(5)
                     \.build()
                     \.showAtCursor()
-        "call s:VMenuManager.startGettingUserInput()
+        "call s:VMenuManager.startListening()
         call s:VMenuManager.__focusedWindow.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(window, 0, 0)))
         let winIdAtFirstTime = string(window.subVmenuWindow.winId)
         call s:Log.simpleLog(winIdAtFirstTime)
