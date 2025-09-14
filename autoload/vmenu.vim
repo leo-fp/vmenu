@@ -570,6 +570,11 @@ function! s:ContextWindow.enter()
         return
     endif
 
+    if -1 == self.__curItemIndex
+        call self.__errConsumer("vmenu: there is no focused item!")
+        return
+    endif
+
     let subItemList = self.contextItemList[self.__curItemIndex].subItemList
     if (!subItemList->empty())
         let subWindow = self.__expand()
@@ -589,6 +594,7 @@ function! s:ContextWindow.__expand()
                 \.parentVmenuWindow(self)
                 \.delay(self.__delayTime)
                 \.editorStatusSupplier(self.__editorStatusSupplier)
+                \.errConsumer(self.__errConsumer)
                 \.build()
     let x = self.x + self.winWidth
     " need minus self.renderStartIdx to correct sub window location when scrollbar is activated
@@ -2815,6 +2821,25 @@ if 0
         let winIdAtSecondTime = string(window.subVmenuWindow.winId)
         call s:Log.simpleLog(winIdAtSecondTime)
         call assert_equal(winIdAtFirstTime, winIdAtSecondTime)
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+    endif
+
+    " the first item in a window that expanded by mouse hovering should not be executed by pressing <CR>
+    if 1
+        let s:errorList = []
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: '1.1', cmd: '', subItemList: [#{name: '1.1.1', cmd: ''}]},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.errConsumer({ msg -> add(s:errorList, msg) })
+                    \.build()
+                    \.showAtCursor()
+        "call s:VMenuManager.startListening()
+        call s:VMenuManager.__focusedWindow.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow, 0, 0)))
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<CR>"))
+        call assert_equal(1, s:VMenuManager.__focusedWindow.isOpen == 1)    " keep opening
+        call assert_equal("vmenu: there is no focused item!", s:errorList[0])
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
     endif
