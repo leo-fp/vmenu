@@ -140,7 +140,6 @@ function! s:VmenuWindowBuilder.new()
     let vmenuWindowBuilder.__goBottomKey         = 'G'  " key to go bottom
     let vmenuWindowBuilder.__x                   = 0    " column number
     let vmenuWindowBuilder.__y                   = 0    " line number
-    let vmenuWindowBuilder.__traceId             = ''   " a text that will be printed in log. for debug
     let vmenuWindowBuilder.__errConsumer = function("s:printWarn")
     let vmenuWindowBuilder.__minWidth = 0   " minimal window width. only supported in context menu
     let vmenuWindowBuilder.__editorStatusSupplier = function("s:getEditorStatus")
@@ -169,10 +168,6 @@ function! s:VmenuWindowBuilder.closeKey(key)
 endfunction
 function! s:VmenuWindowBuilder.bottomKey(key)
     let self.__goBottomKey = a:key
-    return self
-endfunction
-function! s:VmenuWindowBuilder.traceId(traceId)
-    let self.__traceId = a:traceId
     return self
 endfunction
 function! s:VmenuWindowBuilder.errConsumer(errConsumer)
@@ -212,7 +207,6 @@ function! s:VmenuWindow.new()
     let vmenuWindow.__confirmKey          = "\<CR>" " key to enter item
     let vmenuWindow.__delayTime = 0
     let vmenuWindow.__goBottomKey = ''
-    let vmenuWindow.__traceId = ''
     let vmenuWindow.__actionMap = {}
     let vmenuWindow.__errConsumer = function("s:printWarn")
     let vmenuWindow.__curItemIndex = -1
@@ -267,7 +261,7 @@ endfunction
 function! s:VmenuWindow.executeByLeftMouse(mouseClickEvent)
     " calculate index of clicked item
     let clickedIdx = self.getClickedItemIndex(a:mouseClickEvent.mousepos)
-    call self.__logger.info(self.winId .. " will focus at: " .. clickedIdx)
+    call s:log(self.winId .. " will focus at: " .. clickedIdx)
 
     " close all vmenu window
     if clickedIdx == -1
@@ -293,7 +287,7 @@ function! s:VmenuWindow.close(closeCode, event={})
 
     call self.quickuiWindow.close()
     let self.isOpen = 0
-    call self.__logger.info("winid: " .. self.winId .. " closed")
+    call s:log("winid: " .. self.winId .. " closed")
     if has_key(self, 'parentVmenuWindow') && !empty(self.parentVmenuWindow)
         call self.parentVmenuWindow.handleEvent(s:SubMenuCloseEvent.new(a:closeCode, a:event))
     endif
@@ -350,7 +344,7 @@ function! s:VmenuWindow.__onMouseHover(event)
     endif
 
     if !empty(self.subVmenuWindow) && itemIdxAtMousePos != self.__curItemIndex
-        call self.__logger.info("winId: " .. self.winId .. " hover at " .. itemIdxAtMousePos)
+        call s:log("winId: " .. self.winId .. " hover at " .. itemIdxAtMousePos)
         call self.subVmenuWindow.handleEvent(s:RecursiveCloseEvent.new())
     endif
     call s:VMenuManager.setFocusedWindow(self)
@@ -433,13 +427,11 @@ function! s:ContextWindow.new(contextWindowBuilder)
     endfor
 
     let contextWindow.__curItemIndex = -1
-    let contextWindow.__traceId = a:contextWindowBuilder.__traceId
     let contextWindow.__errConsumer = a:contextWindowBuilder.__errConsumer
     let contextWindow.__editorStatusSupplier = a:contextWindowBuilder.__editorStatusSupplier
     let contextWindow.isOpen = 0
     let contextWindow.parentVmenuWindow = a:contextWindowBuilder.__parentContextWindow
-    let contextWindow.__logger = s:Log.new(contextWindow)
-    call contextWindow.__logger.info(printf("new ContextWindow created, winId: %s", contextWindow.winId))
+    call s:log(printf("new ContextWindow created, winId: %s", contextWindow.winId))
 
     let actionMap = {}
     let actionMap[a:contextWindowBuilder.__closeKey]      = { event -> function(contextWindow.close,       [s:CLOSE_SELF_ONLY, s:KeyStrokeEvent.new(a:contextWindowBuilder.__closeKey)], contextWindow) }
@@ -501,7 +493,7 @@ function! s:ContextWindow.showAt(x, y)
     call self.__renderHighlight(-1)
     redraw
 
-    call self.__logger.info(printf("ContextWindow opened at x:%s, y:%s, vmenu winId: %s,
+    call s:log(printf("ContextWindow opened at x:%s, y:%s, vmenu winId: %s,
                 \ quickui winId: %s", self.x, self.y, self.winId, self.quickuiWindow.winid))
     return self
 endfunction
@@ -515,8 +507,8 @@ endfunction
 function! s:ContextWindow.getClickedItemIndex(mousePos)
     let clickedPos = #{x: a:mousePos.screencol, y: a:mousePos.screenrow}
     let topLeftCorner = s:VMenuManager.calcTopLeftPos(self)
-    call self.__logger.info("clickedPos:" .. string(clickedPos))
-    call self.__logger.info("topLeftCorner:" .. string(topLeftCorner))
+    call s:log("clickedPos:" .. string(clickedPos))
+    call s:log("topLeftCorner:" .. string(topLeftCorner))
     if (topLeftCorner.x <= clickedPos.x && clickedPos.x <= topLeftCorner.x + self.winWidth) &&
                 \ (topLeftCorner.y <= clickedPos.y && clickedPos.y < topLeftCorner.y + self.scrollingWindowSize)
         " plus self.renderStartIdx to correct index if scrollbar is activated
@@ -618,13 +610,13 @@ function! s:ContextWindow.__executeCmdField(fieldName="cmd")
     if type(CmdField) == v:t_string
         if strcharlen(CmdField) > 0
             call execute(CmdField)
-            call self.__logger.info(printf("winId: %s, execute cmd: %s", self.winId, CmdField))
+            call s:log(printf("winId: %s, execute cmd: %s", self.winId, CmdField))
         endif
     endif
 
     if type(CmdField) == v:t_func
         call CmdField(s:createCallbackItemParm(curItem), self.__editorStatusSupplier())
-        call self.__logger.info(printf("winId: %s, execute cmd(func): %s", self.winId, CmdField))
+        call s:log(printf("winId: %s, execute cmd(func): %s", self.winId, CmdField))
     endif
 endfunction
 function! s:ContextWindow.__renderText(start, end)
@@ -658,7 +650,7 @@ function! s:ContextWindow.__renderHighlight(offset)
             if scrollbarStartIdx <= index && index < scrollbarStartIdx + scrollbarHeight
                 call add(curItem.syntaxRegionList, ["VmenuScrollbar", win.opts.w-1, win.opts.w])
             endif
-            call self.__logger.info("index: " .. index
+            call s:log("index: " .. index
                         \ .. ", renderStartIdx: " .. self.renderStartIdx
                         \ .. ", scrollbarOffset: " .. scrollbarOffset
                         \ .. ", scrollbarHeight: " .. scrollbarHeight)
@@ -815,11 +807,9 @@ function! s:TopMenuWindow.new(topMenuWindowBuilder)
     let topMenuWindow.__curItemIndex = 0
     let topMenuWindow.__padding = 2 " spaces added on the left and right side for every item
     let topMenuWindow.__delayTime = a:topMenuWindowBuilder.__delayTime
-    let topMenuWindow.__traceId = a:topMenuWindowBuilder.__traceId
     let topMenuWindow.__errConsumer = a:topMenuWindowBuilder.__errConsumer
     let topMenuWindow.isOpen = 0
-    let topMenuWindow.__logger = s:Log.new(topMenuWindow)
-    call topMenuWindow.__logger.info(printf("new TopMenuWindow created, winId: %s", topMenuWindow.winId))
+    call s:log(printf("new TopMenuWindow created, winId: %s", topMenuWindow.winId))
 
     let actionMap = {}
     let actionMap[a:topMenuWindowBuilder.__closeKey]      = { event -> function(topMenuWindow.close,              [s:CLOSE_SELF_ONLY, a:topMenuWindowBuilder.__closeKey], topMenuWindow) }
@@ -859,7 +849,7 @@ function! s:TopMenuWindow.show()
     let self.isOpen = 1
     call s:VMenuManager.setFocusedWindow(self)
     call self.focusItemByIndex(self.__curItemIndex)
-    call self.__logger.info(printf("TopMenuWindow opened at x:%s, y:%s, winId: %s", opts.x, opts.y, self.winId))
+    call s:log(printf("TopMenuWindow opened at x:%s, y:%s, winId: %s", opts.x, opts.y, self.winId))
     return self
 endfunction
 function! s:TopMenuWindow.focusItemByIndex(index)
@@ -941,8 +931,8 @@ endfunction
 function! s:TopMenuWindow.getClickedItemIndex(mousePos)
     let clickedPos = #{x: a:mousePos.screencol, y: a:mousePos.screenrow}
     let topLeftCorner = s:VMenuManager.calcTopLeftPos(self)
-    call self.__logger.info("clickedPos:" .. string(clickedPos))
-    call self.__logger.info("topLeftCorner:" .. string(topLeftCorner))
+    call s:log("clickedPos:" .. string(clickedPos))
+    call s:log("topLeftCorner:" .. string(topLeftCorner))
     if clickedPos.y != 1
         return -1
     endif
@@ -999,7 +989,7 @@ endfunction
 function! s:VMenuManager.initTopMenuItems(name, userItemList)
     let topItem = s:ItemParser.parseQuickuiItem([a:name])
     if indexof(self.__allTopMenuItemList, {i, v -> v.name == topItem.name}) != -1
-        call s:Log.simpleLog(printf("top menu: %s already installed, ignore.", a:name))
+        call s:log(printf("top menu: %s already installed, ignore.", a:name))
         return
     endif
 
@@ -1082,7 +1072,7 @@ endfunction
  " focused context window will receive and handle input
 function! s:VMenuManager.setFocusedWindow(contextWindow)
     let self.__focusedWindow = a:contextWindow
-    call s:Log.simpleLog("set focused window: " .. a:contextWindow.winId)
+    call s:log("set focused window: " .. a:contextWindow.winId)
 endfunction
 
 " top left position (inclusive) of vmenu window
@@ -1449,30 +1439,16 @@ function! vmenu#matchRegex(regex)
 endfunction
 
 "-------------------------------------------------------------------------------
-" class Log
-"-------------------------------------------------------------------------------
-let s:Log = {}
-function! s:Log.new(vmenuWindow)
-    let log = deepcopy(s:Log, 1)
-    let log.vmenuWindow = a:vmenuWindow
-    return log
-endfunction
-function! s:Log.info(msg)
-    if s:enable_log == 1
-        call s:echom(printf("TRACEID:[%s] %s", self.vmenuWindow.__traceId, a:msg))
-    endif
-endfunction
-function! s:Log.simpleLog(msg)
-    if s:enable_log == 1
-        call s:echom(a:msg)
-    endif
-endfunction
-
-"-------------------------------------------------------------------------------
 " utils
 "-------------------------------------------------------------------------------
 function! s:printWarn(msg)
     echohl WarningMsg | echo a:msg | echohl None
+endfunction
+
+function! s:log(msg)
+    if s:enable_log == 1
+        call s:echom(printf("%s %s", strftime("%T"), a:msg))
+    endif
 endfunction
 
 function! s:echom(msg)
@@ -1682,7 +1658,6 @@ if 0
                     \#{name: "&a", subItemList: [#{name: '1.1', cmd: ''}]},
                     \#{name: "&b", subItemList: [#{name: '2.1', cmd: ''}]},
                     \], g:VMENU#ITEM_VERSION.VMENU))
-                    \.traceId("xxx")
                     \.build()
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
@@ -2815,11 +2790,11 @@ if 0
         "call s:VMenuManager.startListening()
         call s:VMenuManager.__focusedWindow.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(window, 0, 0)))
         let winIdAtFirstTime = string(window.subVmenuWindow.winId)
-        call s:Log.simpleLog(winIdAtFirstTime)
+        call s:log(winIdAtFirstTime)
         call window.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(window, 0, 1)))
         call window.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(window, 0, 0)))
         let winIdAtSecondTime = string(window.subVmenuWindow.winId)
-        call s:Log.simpleLog(winIdAtSecondTime)
+        call s:log(winIdAtSecondTime)
         call assert_equal(winIdAtFirstTime, winIdAtSecondTime)
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
