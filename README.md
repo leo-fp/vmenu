@@ -12,9 +12,12 @@ note: These items in the picture are not provided in this plugin.
 just have some ideas want to try, start over seems easier and tempting
 
 ## Here is what I want it to be
-### 0.2.0
 * compatible with vim and neovim (by using old vimscript and unified popup window api of vim-quickui)
 * easy to hack
+* not slow
+* feature rich
+
+### 0.2.0
 * menu and context menu already exist in my config should work as well
 * provide an enhanced context item (vmenu item) that you can control whether to show or active dynamically
 * nice default looking (I ported one from IntelliJ IDEA since I'm not good at it)
@@ -44,15 +47,14 @@ just have some ideas want to try, start over seems easier and tempting
 * This plugin may changes radically, use with caution
 
 ## Install
-install these two plugins using your favorite plugin manager.
+install these two plugins using your favorite package manager.
 ```
 skywind3000/vim-quickui
 leo-fp/vmenu
-
 ```
 ## comming from vim-quickui
 context menu:
-```vimscript
+```vim
 " replace this
 call quickui#context#open(content, opts)
 " to
@@ -60,7 +62,7 @@ call vmenu#openContextWindow(vmenu#parse_context(content), opts)
 
 ```
 top menu:
-```vimscript
+```vim
 " replace this
 call quickui#menu#install
 " to
@@ -71,7 +73,7 @@ call vmenu#openTopMenu()
 ```
 
 ## quick start for beginner
-```vimscript
+```vim
 "-------------------------------------------------------------------------------
 " top menu
 "-------------------------------------------------------------------------------
@@ -102,24 +104,23 @@ vnoremap <silent> <leader>q :call vmenu#openContextWindow(vmenu#parse_context(co
 
 ## tips and tricks
 * vim-quickui item and vmenu item can be mixed like this
-```vimscript
-" example
-    " context menu
-    let list = [
-                \ ["vim-quickui item", ''],
-                \ vmenu#parse_context([#{name: "vmenu item", cmd: ""}], g:VMENU#ITEM_VERSION.VMENU)[0]
-                \]
-    call vmenu#openContextWindow(list, {})
+```vim
+" context menu
+let list = [
+            \ ["vim-quickui item", ''],
+            \ vmenu#parse_context([#{name: "vmenu item", cmd: ""}], g:VMENU#ITEM_VERSION.VMENU)[0]
+            \]
+call vmenu#openContextWindow(list, {})
 
-    " top menu
-    call vmenu#installTopMenu('menu_name', [
-                \ [ "vim-quickui item name", '', ""] ,
-                \ vmenu#parse_context([#{name: 'vmenu item name', cmd: ''}], g:VMENU#ITEM_VERSION.VMENU)[0]
-                \])
+" top menu
+call vmenu#installTopMenu('menu_name', [
+            \ [ "vim-quickui item name", '', ""] ,
+            \ vmenu#parse_context([#{name: 'vmenu item name', cmd: ''}], g:VMENU#ITEM_VERSION.VMENU)[0]
+            \])
 ```
 
 * if you want define a vmenu item that behaves like pressing a key
-```vimscript
+```vim
 let content = vmenu#parse_context([
             \#{name: 'copy relative path', cmd: 'norm Y'},
             \], g:VMENU#ITEM_VERSION.VMENU)
@@ -127,7 +128,7 @@ call vmenu#openContextWindow(content, {})
 
 ```
 * if you want define a vmenu item that only appears in specific file type
-```vimscript
+```vim
 let content = vmenu#parse_context([
             \#{name: 'copy relative path', cmd: 'norm Y', show-ft: ["NvimTree"]},
             \], g:VMENU#ITEM_VERSION.VMENU)
@@ -135,7 +136,7 @@ call vmenu#openContextWindow(content, {})
 
 ```
 * if you want define a vmenu item that deactive in specific file type
-```vimscript
+```vim
 let content = vmenu#parse_context([
             \#{name: 'copy relative path', cmd: 'norm Y', deactive-ft: ["NvimTree"]},
             \], g:VMENU#ITEM_VERSION.VMENU)
@@ -144,7 +145,7 @@ call vmenu#openContextWindow(content, {})
 ```
 
 * if you want define a vmenu item that only appears in specific mode
-```vimscript
+```vim
 call vmenu#openContextWindow(vmenu#parse_context([
             \#{name: 'visual mode only item', cmd: '', show-mode: ["v"]},
             \], g:VMENU#ITEM_VERSION.VMENU), #{curMode: 'v'})
@@ -152,7 +153,7 @@ call vmenu#openContextWindow(vmenu#parse_context([
 ```
 
 * preview installed colorscheme (kind of lame, but it works)
-```vimscript
+```vim
 call vmenu#openContextWindow(vmenu#parse_context([
             \#{name: "preview colorscheme\t", subItemList:
             \ map(getcompletion('', 'color'),
@@ -170,12 +171,25 @@ call vmenu#openContextWindow(vmenu#parse_context([
 * if you want a more flexible way to control vmenu item show status or deactive status, you can
 define a function to `show-if` or `deactive-if` field. for more details, check `:h vmenu`
 
-## related projects
+## similar plugins
 [vim-quickui](https://github.com/skywind3000/vim-quickui)
 
 [which-key.nvim](https://github.com/folke/which-key.nvim)
 
 [menu](https://github.com/nvzone/menu)
+
+## inspired by
+[vim-quickui](https://github.com/skywind3000/vim-quickui)
+
+[IntelliJ IDEA - JetBrains](https://www.jetbrains.com/idea/)
+
+[which-key.nvim](https://github.com/folke/which-key.nvim)
+
+[nui.nvim](https://github.com/MunifTanjim/nui.nvim)
+
+[menu](https://github.com/nvzone/menu)
+
+[dropbar.nvim](https://github.com/Bekaboo/dropbar.nvim)
 
 ## known problem
 * because I'm not using all features of menu and context menu, some features may missing
