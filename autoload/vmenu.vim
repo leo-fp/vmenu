@@ -509,13 +509,23 @@ function! s:ContextWindow.getClickedItemIndex(mousePos)
     let topLeftCorner = s:VMenuManager.calcTopLeftPos(self)
     call s:log("clickedPos:" .. string(clickedPos))
     call s:log("topLeftCorner:" .. string(topLeftCorner))
-    if (topLeftCorner.x <= clickedPos.x && clickedPos.x <= topLeftCorner.x + self.winWidth) &&
-                \ (topLeftCorner.y <= clickedPos.y && clickedPos.y < topLeftCorner.y + self.scrollingWindowSize)
+    if self.isInArea(clickedPos.x, clickedPos.y)
         " plus self.renderStartIdx to correct index if scrollbar is activated
         return clickedPos.y - topLeftCorner.y + self.renderStartIdx
     endif
 
     return -1
+endfunction
+
+" is the position in window
+function! s:ContextWindow.isInArea(x, y)
+    let topLeftCorner = s:VMenuManager.calcTopLeftPos(self)
+    if (topLeftCorner.x <= a:x && a:x <= topLeftCorner.x + self.winWidth) &&
+                \ (topLeftCorner.y <= a:y && a:y < topLeftCorner.y + self.scrollingWindowSize)
+        return 1
+    else
+        return 0
+    endif
 endfunction
 
 function! s:ContextWindow.focusItemByIndex(index)
@@ -588,17 +598,25 @@ function! s:ContextWindow.__expand()
                 \.editorStatusSupplier(self.__editorStatusSupplier)
                 \.errConsumer(self.__errConsumer)
                 \.build()
+    let [x, y] = self.__calcExpandPos(subContextWindow.winWidth)
+    let subWindow = subContextWindow.showAt(x, y)
+    let self.subVmenuWindow = subWindow
+    return subWindow
+endfunction
+function! s:ContextWindow.__calcExpandPos(winWidth)
     let x = self.x + self.winWidth
     " need minus self.renderStartIdx to correct sub window location when scrollbar is activated
     let y = self.y + self.__curItemIndex - self.renderStartIdx
 
-    " if there are insufficient space for sub context window at right side, then open at left side
-    if self.x + self.winWidth + subContextWindow.winWidth > &columns
-        let x = self.x - subContextWindow.winWidth
+    " sub window need to be opened on the left in these situations
+    " 1) there are insufficient space for sub context window on the right
+    " 2) there is already a window opened on the right
+    if self.x + self.winWidth + a:winWidth > &columns ||
+                \ has_key(self.parentVmenuWindow, 'isInArea') && self.parentVmenuWindow.isInArea(x+1, y+1) == 1 " [x+1, y+1] is top left corner (inclusive) position of expanded window
+        let x = self.x - a:winWidth
     endif
-    let subWindow = subContextWindow.showAt(x, y)
-    let self.subVmenuWindow = subWindow
-    return subWindow
+
+    return [x, y]
 endfunction
 function! s:ContextWindow.__execute()
     call self.close(s:CASCADE_CLOSE)
@@ -2815,6 +2833,28 @@ if 0
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<CR>"))
         call assert_equal(1, s:VMenuManager.__focusedWindow.isOpen == 1)    " keep opening
         call assert_equal("vmenu: there is no focused item!", s:errorList[0])
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+    endif
+
+    " open a window on the far right, child window and grandchild window need to be opened on left side
+    if 1
+        let s:errorList = []
+        let window = s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: '1', cmd: '', subItemList: [#{name: '2', cmd: '', subItemList: [#{name: '3', cmd: ''}]}]},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.errConsumer({ msg -> add(s:errorList, msg) })
+                    \.build()
+                    \.showAt(&columns, 0)   " set x to &columns to make sure the first window opened on the far right
+        call window.__focusFirstMatch([0])
+        "call s:VMenuManager.startListening()
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<CR>"))
+        let secondMenuPos = s:VMenuManager.calcTopLeftPos(s:VMenuManager.__focusedWindow)
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<CR>"))
+        let thirdMenuPos = s:VMenuManager.calcTopLeftPos(s:VMenuManager.__focusedWindow)
+        call assert_true(thirdMenuPos.x < secondMenuPos.x)
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
     endif
