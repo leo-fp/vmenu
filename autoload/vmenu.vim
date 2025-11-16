@@ -27,6 +27,7 @@ let s:CASCADE_CLOSE = 1
 let s:CLOSE_SELF_ONLY = 0
 let s:NOT_IN_AREA = 2
 let s:RECURSIVE_CLOSE = 3   " close a window and its sub window
+let s:ITEM_PATH_SEP = ' > '
 let g:VMENU#ITEM_VERSION = #{QUICKUI: 1, VMENU: 2}
 
 "-------------------------------------------------------------------------------
@@ -399,7 +400,7 @@ endfunction
 function! s:ContextWindow.new(contextWindowBuilder)
     let contextWindow = s:VmenuWindow.new()
     call extend(contextWindow, deepcopy(s:ContextWindow, 1), "force")
-    let contextWindow.contextItemList = s:ContextWindow.__fileterVisibleItems(a:contextWindowBuilder.__contextItemList, a:contextWindowBuilder.__editorStatusSupplier())
+    let contextWindow.contextItemList = s:filterVisibleItems(a:contextWindowBuilder.__contextItemList, a:contextWindowBuilder.__editorStatusSupplier())
     let contextWindow.contextItemList = s:ItemParser.__addSurroundedSeparatorLine(contextWindow.contextItemList)
     let contextWindow.contextItemList = s:ItemParser.__fillNameToSameLength(contextWindow.contextItemList)
     let contextWindow.contextItemList = s:ItemParser.__concatenateShortKey(contextWindow.contextItemList)
@@ -411,7 +412,7 @@ function! s:ContextWindow.new(contextWindowBuilder)
     let contextWindow.quickuiWindow = quickui#window#new()
     let contextWindow.winId = rand(srand())
     let contextWindow.hotKeyList = []
-    let contextWindow.winWidth = strcharlen(contextWindow.contextItemList[0].name)
+    let contextWindow.winWidth = strcharlen(empty(contextWindow.contextItemList) ? 0 : contextWindow.contextItemList[0].name)
     let contextWindow.winHeight = contextWindow.contextItemList->len()
     let contextWindow.scrollingWindowSize = min([a:contextWindowBuilder.__scrollingWindowSize, contextWindow.winHeight])
     let contextWindow.renderStartIdx = 0
@@ -453,13 +454,38 @@ endfunction
 function! s:ContextWindow.getCurItem()
     return self.contextItemList[self.__curItemIndex]
 endfunction
+
 " editorStatus: class EditorStautus
-function! s:ContextWindow.__fileterVisibleItems(itemList, editorStatus)
+function! s:filterVisibleItems(itemList, editorStatus)
     let activeItems = []
 
     for contextItem in a:itemList
         if get(contextItem, 'isVisible')(a:editorStatus) == 1
             call add(activeItems, deepcopy(contextItem, 1))
+        endif
+    endfor
+
+    return activeItems
+endfunction
+
+" editorStatus: class EditorStautus
+function! s:filterQueryableItems(itemList, editorStatus)
+    let activeItems = []
+
+    for contextItem in a:itemList
+        if get(contextItem, 'isVisible')(a:editorStatus) == 0
+                    \ || get(contextItem, 'isInactive')(a:editorStatus) == 1
+                    \ || contextItem.isSep == 1
+            continue
+        endif
+
+        if contextItem.subItemList->empty()
+            call add(activeItems, deepcopy(contextItem, 1))
+        else
+            call extend(activeItems,
+                        \ s:filterQueryableItems(
+                        \   s:flattenVmenuItemList(contextItem.subItemList), a:editorStatus)
+                        \ )
         endif
     endfor
 
@@ -499,7 +525,12 @@ function! s:ContextWindow.showAt(x, y)
 endfunction
 function! s:ContextWindow.showAtCursor()
     let cursorPos = quickui#core#around_cursor(self.winWidth, self.contextItemList->len())
-    call self.showAt(cursorPos[1], cursorPos[0])
+    try
+        call self.showAt(cursorPos[1], cursorPos[0])
+    catch "NoVisibleItemException"
+        " ignore
+    endtry
+
     call self.__focusFirstMatch(range(self.__componentLength))
     return self
 endfunction
@@ -625,17 +656,8 @@ endfunction
 function! s:ContextWindow.__executeCmdField(fieldName="cmd")
     let curItem = self.contextItemList[self.__curItemIndex]
     let CmdField = curItem[a:fieldName]
-    if type(CmdField) == v:t_string
-        if strcharlen(CmdField) > 0
-            call execute(CmdField)
-            call s:log(printf("winId: %s, execute cmd: %s", self.winId, CmdField))
-        endif
-    endif
-
-    if type(CmdField) == v:t_func
-        call CmdField(s:createCallbackItemParm(curItem), self.__editorStatusSupplier())
-        call s:log(printf("winId: %s, execute cmd(func): %s", self.winId, CmdField))
-    endif
+    call s:executeCmd(CmdField, curItem, self.__editorStatusSupplier())
+    call s:log(printf("winId: %s, execute cmd: %s", self.winId, CmdField))
 endfunction
 function! s:ContextWindow.__renderText(start, end)
     return reduce(self.contextItemList[a:start:a:end], { acc, val -> add(acc, val.name) }, [])
@@ -738,6 +760,8 @@ endfunction
 let s:ContextItem = {}
 function! s:ContextItem.new(dict)
     let contextItem                 = {}
+    let contextItem.id              = rand(srand())
+    let contextItem.path            = ''
     let contextItem.shortKey        = get(a:dict, 'shortKey', '')
     let contextItem.icon            = get(a:dict, 'icon', '')
     let contextItem.cmd             = get(a:dict, 'cmd', '')
@@ -760,6 +784,29 @@ function! s:ContextItem.new(dict)
     return contextItem
 endfunction
 
+function! s:initItemPathRecursively(contextItem, parentPath, separatorChar=s:ITEM_PATH_SEP)
+    if '' == a:parentPath
+        let a:contextItem.path = a:contextItem.name
+    else
+        let a:contextItem.path = a:parentPath .. a:separatorChar .. a:contextItem.name
+    endif
+    for item in a:contextItem.subItemList
+        call s:initItemPathRecursively(item, a:contextItem.path)
+    endfor
+endfunction
+
+function! s:flattenVmenuItemList(vmenuItemList)
+    let res = []
+    for item in a:vmenuItemList
+        call add(res, item)
+        if !item.subItemList->empty()
+            call extend(res, s:flattenVmenuItemList(item.subItemList))
+        endif
+    endfor
+
+    return res
+endfunction
+
 "-------------------------------------------------------------------------------
 " class TopMenuItem
 "-------------------------------------------------------------------------------
@@ -767,13 +814,14 @@ let s:TopMenuItem = {}
 function! s:TopMenuItem.new(name, hotKey, hotKeyPos, contextItemList)
     let topMenuItem = deepcopy(s:TopMenuItem, 1)
     let topMenuItem.name = a:name
+    let topMenuItem.path = a:name
     let topMenuItem.hotKeyPos = a:hotKeyPos
     let topMenuItem.hotKey = a:hotKey
     let topMenuItem.contextItemList = deepcopy(a:contextItemList, 1)
     return topMenuItem
 endfunction
 function! s:TopMenuItem.appendTopMenuItems(contextItemList)
-    call extend(self.contextItemList, deepcopy(a:contextItemList, 1))
+    call extend(self.subItemList, deepcopy(a:contextItemList, 1))
 endfunction
 
 "-------------------------------------------------------------------------------
@@ -977,7 +1025,7 @@ endfunction
 "-------------------------------------------------------------------------------
 let s:EditorStatus = {}
 function! s:getEditorStatus(curMode="n")
-    let editorStatus = deepcopy(s:EditorStatus, 1)
+    let editorStatus = {}
     let editorStatus.currentMode = a:curMode
     let editorStatus.currentFileType = &ft
     " get selected text will move the cursor to the last visual area, so only get selected text in visual mode.
@@ -993,14 +1041,16 @@ let s:VMenuManager = {}
 let s:VMenuManager.__allTopMenuItemList = []
 let s:VMenuManager.__focusedWindow = {}
 let s:VMenuManager.__keepGettingInput = 0
+let s:VMenuManager.parsedContextItemList = []
+let s:VMenuManager.LastEditorStatus = {}      " save the editor status when calling vmenu#queryItems. this will be used in vmenu#executeItemById
+let s:VMenuManager.lastQueryableItems = []    " save the last queryable item list when calling vmenu#queryItems. this will be used in vmenu#executeItemById
 function! s:VMenuManager.parseContextItem(userItemList, itemVersion=g:VMENU#ITEM_VERSION.QUICKUI)
-    let s:VMenuManager.__allContextItemList = []
-
     let ItemParser = function(s:ItemParser.parseQuickuiItem, [])
     if a:itemVersion == g:VMENU#ITEM_VERSION.VMENU
         let ItemParser = function(s:ItemParser.parseVMenuItem, [])
     endif
     let contextItemList = reduce(a:userItemList, { acc, val -> add(acc, ItemParser(val)) }, [])
+    call foreach(contextItemList, { i, v -> s:initItemPathRecursively(v, '') })
 
     return deepcopy(contextItemList, 1)
 endfunction
@@ -1011,8 +1061,12 @@ function! s:VMenuManager.initTopMenuItems(name, userItemList)
         return
     endif
 
+    let subItemList = self.parseUserDefinedItemList(a:userItemList)
+    call foreach(subItemList, { i, v -> s:initItemPathRecursively(v, topItem.name) })
+    call s:VMenuManager.saveParsedContextItemList(subItemList)
+
     let topMenuItem = s:TopMenuItem.new(topItem.name, topItem.hotKey,
-                \ topItem.hotKeyPos, self.parseUserDefinedItemList(a:userItemList))
+                \ topItem.hotKeyPos, subItemList)
     call add(s:VMenuManager.__allTopMenuItemList, topMenuItem)
     return topMenuItem
 endfunction
@@ -1022,11 +1076,11 @@ function! s:VMenuManager.parseUserDefinedItemList(userItemList)
     let itemList = []
     " the userItemList may mixed with vim-qucikui items and parsed vmenu items.
     " for the latter, just use directely
-    for idx in range(a:userItemList->len())
-        if IsParsedVmenuItems(a:userItemList[idx])
-            call add(itemList, deepcopy(a:userItemList[idx], 1))
+    for item in a:userItemList
+        if IsParsedVmenuItems(item)
+            call add(itemList, deepcopy(item, 1))
         else
-            call add(itemList, s:ItemParser.parseQuickuiItem(a:userItemList[idx]))
+            call add(itemList, s:ItemParser.parseQuickuiItem(item))
         endif
     endfor
     return itemList
@@ -1098,6 +1152,10 @@ function! s:VMenuManager.calcTopLeftPos(vmenuWindow)
     return #{x: a:vmenuWindow.x+1, y: a:vmenuWindow.y+1}
 endfunction
 
+function! s:VMenuManager.saveParsedContextItemList(items)
+    call extend(s:VMenuManager.parsedContextItemList, deepcopy(a:items, 1))
+endfunction
+
 
 function! s:getSelectedText()
     let origin = getreg('z')
@@ -1115,7 +1173,7 @@ let s:ItemParser = {}
 function! s:ItemParser.parseVMenuItem(userItem)
     let quickuiItem = {}
     let quickuiItem = quickui#utils#item_parse([get(a:userItem, 'name', '')])
-    let name = quickuiItem.text
+    let name      = quickuiItem.text
     let hotKeyPos = get(quickuiItem, 'key_pos', '')
     let hotKey    = get(quickuiItem, 'key_char', '')
     let isSep     = get(a:userItem, 'isSep', '')
@@ -1124,9 +1182,9 @@ function! s:ItemParser.parseVMenuItem(userItem)
     let tip       = get(a:userItem, 'tip', '')
     let icon      = get(a:userItem, 'icon', '')
     let shortKey  = get(quickuiItem, 'desc', '')
-    let descPos = -1    " will be calculated when context window created
+    let descPos   = -1    " will be calculated when context window created
     let descWidth = get(quickuiItem, 'desc_width', 0)
-    let group  = get(a:userItem, 'group', '')
+    let group     = get(a:userItem, 'group', '')
     let subItemList = []
     if (has_key(a:userItem, 'subItemList'))
         for item in get(a:userItem, 'subItemList')
@@ -1172,7 +1230,7 @@ function! s:ItemParser.parseVMenuItem(userItem)
                 \descPos: descPos,
                 \descWidth: descWidth,
                 \group: group,
-                \onFocus: OnFocus
+                \onFocus: OnFocus,
                 \})
 endfunction
 function! s:ItemParser.parseQuickuiItem(quickuiItem)
@@ -1225,7 +1283,7 @@ function! s:ItemParser.parseQuickuiItem(quickuiItem)
                 \descPos: descPos,
                 \descWidth: descWidth,
                 \isSep: isSep,
-                \itemVersion: g:VMENU#ITEM_VERSION.QUICKUI}
+                \itemVersion: g:VMENU#ITEM_VERSION.QUICKUI},
                 \)
 endfunction
 
@@ -1299,6 +1357,10 @@ function! s:ItemParser.__stretchingIfNeed(contextItemList, minWidth)
 endfunction
 function! s:ItemParser.__renderSeparatorLine(contextItemList)
     let workingContextItemList = deepcopy(a:contextItemList, 1)
+    if a:contextItemList->empty()
+        return workingContextItemList
+    endif
+
     let width = strcharlen(a:contextItemList[0].name)
     for contextItem in workingContextItemList
         if (contextItem.isSep == 1)
@@ -1440,6 +1502,43 @@ function! vmenu#cleanTopMenu()
     let s:VMenuManager.__allTopMenuItemList = []
 endfunction
 
+" query installed items (flattened)
+" opts: same as "opts" in vmenu#openContextWindow
+" return: [#{id: xx, path: xx, name: xx}]
+function! vmenu#queryItems(opts)
+    let editorStatus = {}
+    if get(a:opts, 'curMode', '') != ''
+        let editorStatus = s:getEditorStatus(a:opts.curMode)
+    else
+        let editorStatus = s:getEditorStatus()
+    endif
+    let s:VMenuManager.LastEditorStatus = editorStatus
+
+    let queryableItems = s:filterQueryableItems(
+                \ s:VMenuManager.parsedContextItemList,
+                \ editorStatus
+                \)
+    let s:VMenuManager.lastQueryableItems = queryableItems
+    return reduce(queryableItems, { acc, val -> add(acc, #{id: val.id, path: val.path, name: val.name}) }, [])
+endfunction
+
+function! vmenu#executeItemById(itemId)
+    let idx = indexof(s:VMenuManager.lastQueryableItems, {i, v -> v.id == a:itemId})
+    if idx != -1
+        let item = s:VMenuManager.lastQueryableItems[idx]
+        call s:executeCmd(item['cmd'], item, s:VMenuManager.LastEditorStatus)
+        call s:log("vmenu: execute item. id: " .. a:itemId)
+    else
+        call s:printWarn("vmenu: item not found! id: " .. a:itemId)
+    endif
+endfunction
+
+function! vmenu#installContextMenu(userDefinedItems)
+    let parsedItemList = s:VMenuManager.parseUserDefinedItemList(a:userDefinedItems)
+    call foreach(parsedItemList, { i, v -> s:initItemPathRecursively(v, '') })
+    call s:VMenuManager.saveParsedContextItemList(parsedItemList)
+endfunction
+
 function! vmenu#itemTips()
     if (s:VMenuManager.__focusedWindow.isOpen == 1)
         return s:VMenuManager.__focusedWindow.getFocusedItemTips()
@@ -1487,6 +1586,18 @@ endfunction
 function! s:createMousePosFromTopLeft(vmenuWindow, offsetX, offsetY)
     return #{screencol: s:VMenuManager.calcTopLeftPos(a:vmenuWindow).x + a:offsetX,
                 \ screenrow: s:VMenuManager.calcTopLeftPos(a:vmenuWindow).y + a:offsetY}
+endfunction
+
+function! s:executeCmd(Cmd, item, editorStatus)
+    if type(a:Cmd) == v:t_string
+        if strcharlen(a:Cmd) > 0
+            call execute(a:Cmd)
+        endif
+    endif
+
+    if type(a:Cmd) == v:t_func
+        call a:Cmd(s:createCallbackItemParm(a:item), a:editorStatus)
+    endif
 endfunction
 
 " only used in testing
@@ -1960,7 +2071,7 @@ if 0
 
     " __fileterVisibleItems test
     if 1
-        call assert_equal(2, s:ContextWindow.__fileterVisibleItems(s:VMenuManager.parseContextItem([
+        call assert_equal(2, s:filterVisibleItems(s:VMenuManager.parseContextItem([
                     \#{name: 'a', cmd: 'echom 1'},
                     \#{name: 'b', cmd: 'echo 1', tip: 'tip', icon: '', show-mode: ['n']}
                     \], g:VMENU#ITEM_VERSION.VMENU), #{currentMode: "n"})->len())
@@ -1968,10 +2079,10 @@ if 0
 
     " show-if test
     if 1
-        call assert_equal(1, s:ContextWindow.__fileterVisibleItems(s:VMenuManager.parseContextItem([
+        call assert_equal(1, s:filterVisibleItems(s:VMenuManager.parseContextItem([
                     \#{name: 'b', cmd: 'echo 1', tip: 'tip', icon: '', show-if: function('s:alwaysTruePredicate')}
                     \], g:VMENU#ITEM_VERSION.VMENU), #{currentMode: "n"})->len())
-        call assert_equal(0, s:ContextWindow.__fileterVisibleItems(s:VMenuManager.parseContextItem([
+        call assert_equal(0, s:filterVisibleItems(s:VMenuManager.parseContextItem([
                     \#{name: 'b', cmd: 'echo 1', tip: 'tip', icon: '', show-if: function('s:alwaysFalsePredicate')}
                     \], g:VMENU#ITEM_VERSION.VMENU), #{currentMode: "n"})->len())
     endif
@@ -2839,12 +2950,10 @@ if 0
 
     " open a window on the far right, child window and grandchild window need to be opened on left side
     if 1
-        let s:errorList = []
         let window = s:ContextWindow.builder()
                     \.contextItemList(s:VMenuManager.parseContextItem([
                     \#{name: '1', cmd: '', subItemList: [#{name: '2', cmd: '', subItemList: [#{name: '3', cmd: ''}]}]},
                     \], g:VMENU#ITEM_VERSION.VMENU))
-                    \.errConsumer({ msg -> add(s:errorList, msg) })
                     \.build()
                     \.showAt(&columns, 0)   " set x to &columns to make sure the first window opened on the far right
         call window.__focusFirstMatch([0])
@@ -2857,6 +2966,153 @@ if 0
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+    endif
+
+    " (context menu) item path test
+    if 1
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: '1', cmd: '', subItemList: [#{name: '2', cmd: '', subItemList: [#{name: '3', cmd: ''}]}]},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.build()
+                    \.showAtCursor()
+        "call s:VMenuManager.startListening()
+        call assert_equal('1', s:VMenuManager.__focusedWindow.getCurItem().path)
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<CR>"))
+        call assert_equal('1 > 2', s:VMenuManager.__focusedWindow.getCurItem().path)
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<CR>"))
+        call assert_equal('1 > 2 > 3', s:VMenuManager.__focusedWindow.getCurItem().path)
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+    endif
+
+    " (context menu. quickui item) item path test
+    if 1
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \["1", 'call quickui#context#expand([["2", "echo 1"]])']
+                    \]))
+                    \.build()
+                    \.showAtCursor()
+        "call s:VMenuManager.startListening()
+        call assert_equal('1', s:VMenuManager.__focusedWindow.getCurItem().path)
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<CR>"))
+        call assert_equal('1 > 2', s:VMenuManager.__focusedWindow.getCurItem().path)
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+    endif
+
+    " (topmenu) item path test
+    if 1
+        call vmenu#cleanTopMenu()
+        call s:VMenuManager.initTopMenuItems('&1', [
+                    \vmenu#parse_context([#{name: '2', cmd: '', subItemList: [#{name: '3', cmd: ''}]}], g:VMENU#ITEM_VERSION.VMENU)[0],
+                    \ [ "vim-quickui item name", '', ""]
+                    \]
+                    \)
+        call s:TopMenuWindow.builder()
+                    \.topMenuItemList(s:VMenuManager.__allTopMenuItemList)
+                    \.build()
+                    \.show()
+        call assert_true(-1 != indexof(vmenu#queryItems({}), {i, v -> v.path == "1 > vim-quickui item name"}))
+        call assert_equal('1', s:VMenuManager.__focusedWindow.getCurItem().path)
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<CR>"))
+        call assert_equal('1 > 2', s:VMenuManager.__focusedWindow.getCurItem().path)
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<CR>"))
+        call assert_equal('1 > 2 > 3', s:VMenuManager.__focusedWindow.getCurItem().path)
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+    endif
+
+    " (topmenu) test for parsed item count
+    if 1
+        let s:VMenuManager.parsedContextItemList = []
+        call vmenu#cleanTopMenu()
+        call s:VMenuManager.initTopMenuItems('1', vmenu#parse_context([
+                    \#{name: '2', cmd: '', subItemList: [#{name: '3', cmd: ''}]},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+        call s:TopMenuWindow.builder()
+                    \.topMenuItemList(s:VMenuManager.__allTopMenuItemList)
+                    \.build()
+                    \.show()
+        call assert_equal(1, vmenu#queryItems({})->len())    " only executable item can be saved
+        call assert_equal('1 > 2 > 3', vmenu#queryItems({})[0].path)
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+    endif
+
+    " vmenu#installContextMenu test
+    if 1
+        let s:VMenuManager.parsedContextItemList = []
+        call vmenu#installContextMenu([
+            \ ["vim-quickui item", ''],
+            \ vmenu#parse_context([#{name: "vmenu item", cmd: "", subItemList: [#{name: '1', cmd: ''}]}], g:VMENU#ITEM_VERSION.VMENU)[0]
+            \])
+        call assert_equal(2, vmenu#queryItems({})->len())
+        call assert_true(-1 != indexof(vmenu#queryItems({}), {i, v -> v.path == "vim-quickui item"}))
+        call assert_true(-1 != indexof(vmenu#queryItems({}), {i, v -> v.path == "vmenu item > 1"}))
+    endif
+
+    " vmenu#queryItems test
+    if 1
+        let s:VMenuManager.parsedContextItemList = []
+        call vmenu#installContextMenu([
+                    \ ["vim-quickui item", ''],
+                    \ vmenu#parse_context([
+                    \   #{name: "2", cmd: "", subItemList: [#{name: '2.1', cmd: '', show-mode: ['n']}]},
+                    \], g:VMENU#ITEM_VERSION.VMENU)[0],
+                    \ vmenu#parse_context([
+                    \   #{name: "3", cmd: "", subItemList: [#{name: '3.1', cmd: '', show-mode: ['v']}]},
+                    \], g:VMENU#ITEM_VERSION.VMENU)[0]
+                    \])
+        let items = vmenu#queryItems(#{curMode: 'v'})
+        call assert_equal(2, items->len())
+        call assert_true(-1 != indexof(items, {i, v -> v.name == "3.1"}))
+        call assert_true(-1 != indexof(items, {i, v -> v.name == "vim-quickui item"}))
+    endif
+
+    " separator line should not be saved
+    if 1
+        let s:VMenuManager.parsedContextItemList = []
+        call vmenu#installContextMenu([
+                    \ "--",
+                    \ vmenu#parse_context([
+                    \   #{isSep:1},
+                    \], g:VMENU#ITEM_VERSION.VMENU)[0],
+                    \])
+        call assert_equal(0, vmenu#queryItems({})->len())
+    endif
+
+    " inactive item should not be queryable
+    if 1
+        let s:VMenuManager.parsedContextItemList = []
+        call vmenu#installContextMenu(vmenu#parse_context([
+                    \#{name: '1', cmd: '', deactive-if: function('s:alwaysTruePredicate')}
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+        call assert_equal(0, vmenu#queryItems({})->len())
+    endif
+
+    " if parent item is not queryable, the sub items should not be queryable
+    if 1
+        let s:VMenuManager.parsedContextItemList = []
+        call vmenu#installContextMenu(vmenu#parse_context([
+                    \#{name: '1', deactive-if: function('s:alwaysTruePredicate'), subItemList: [#{name: '1.1', cmd: ''}]}
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+        call assert_equal(0, vmenu#queryItems({})->len())
+    endif
+
+    " vmenu#executeItemById test
+    if 1
+        let s:VMenuManager.parsedContextItemList = []
+        let s:testList = []
+        call vmenu#installContextMenu([vmenu#parse_context([
+                    \ #{name: '1', subItemList: [#{name: "1.1", cmd: { -> vmenu#testEcho('8d14530b-8381-44ac-821a-f95a1b556d69') }}]},
+                    \], g:VMENU#ITEM_VERSION.VMENU)[0]
+                    \])
+        let items = vmenu#queryItems({})
+        call vmenu#executeItemById(items[0].id)
+        call assert_true(index(s:testList, '8d14530b-8381-44ac-821a-f95a1b556d69') != -1)
     endif
 
     call s:showErrors()

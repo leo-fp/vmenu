@@ -14,6 +14,9 @@ Version:	0.3.0
     3.6 vmenu#existFileType()...........................|vmenu#existFileType()|
     3.7 vmenu#matchRegex().................................|vmenu#matchRegex()|
     3.8 vmenu#cleanTopMenu().............................|vmenu#cleanTopMenu()|
+    3.9 vmenu#installContextMenu().................|vmenu#installContextMenu()|
+    3.10 vmenu#queryItems()................................|vmenu#queryItems()|
+    3.11 vmenu#executeItemById()......................|vmenu#executeItemById()|
 4. vmenu item field	.........................................|vmenu-item-field|
     4.1 show-ft.................................................|vmenu-show-ft|
     4.2 show-mode.............................................|vmenu-show-mode|
@@ -139,6 +142,46 @@ return: 1: match. 0: not match
 ----------------------------------------
 Clean installed top menu.
 
+
+3.9 vmenu#installContextMenu(content)               *vmenu#installContextMenu()*
+----------------------------------------
+Save the context menu items that can be used for fuzzy picker.
+
+param:
+    content: same as "content" in vmenu#openContextWindow
+
+
+3.10 vmenu#queryItems(opts)                                 *vmenu#queryItems()*
+----------------------------------------
+Query the installed vmenu items for fuzzy picker use.
+
+top menu items are already queryable.
+context menu items need to be installed by "vmenu#vmenu#installContextMenu"
+at first to make them queryable.
+
+param:
+    opts: same as "opts" in vmenu#openContextWindow
+
+return:
+    queryable item list.
+    An item is considered queryable if it can be selected and executed when
+    the top menu or context menu window is opened.
+
+    each item consist of these fields.
+
+    id: id of the item.
+    path: path string to current item.
+    name: item name.
+
+
+3.11 vmenu#executeItemById(itemId)                       *vmenu#executeItemById()*
+----------------------------------------
+Execute item by item id.
+
+param:
+    itemId: item id.
+
+
 ==============================================================================
 4. vmenu item field						                      *vmenu-item-field*
 
@@ -154,7 +197,7 @@ File type can be get by >
 4.2 show-mode                                                  *vmenu-show-mode*
 ----------------------------------------
 If you want vmenu item only appears in specific mode.
-the "curMode" is required.
+If this field is not defined, the item will be visible by default.
 >
     call vmenu#openContextWindow(vmenu#parse_context([
                 \#{name: 'item name', cmd: '', show-mode: ["v"]},

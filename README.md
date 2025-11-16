@@ -42,6 +42,7 @@ just have some ideas want to try, start over seems easier and tempting
 
 ### 0.4.0 NEXT
 - [ ] an always opening top menu
+- [x] fuzzy picker suport
 
 ## NOTE
 * This plugin may changes radically, use with caution
@@ -153,6 +154,7 @@ call vmenu#openContextWindow(vmenu#parse_context([
 ```
 
 * preview installed colorscheme (kind of lame, but it works)
+
 ```vim
 call vmenu#openContextWindow(vmenu#parse_context([
             \#{name: "preview colorscheme\t", subItemList:
@@ -166,6 +168,51 @@ call vmenu#openContextWindow(vmenu#parse_context([
             \  })
             \},
             \], g:VMENU#ITEM_VERSION.VMENU), #{})
+```
+
+
+* fuzzy picker support
+telescope.nvim
+
+![telescope.nvim](./screenshot/picker.png)
+
+```lua
+local pickers = require "telescope.pickers"
+local finders = require "telescope.finders"
+local conf = require("telescope.config").values
+local actions = require "telescope.actions"
+local action_state = require "telescope.actions.state"
+
+local VmenuPicker = function(opts)
+    opts = opts or {}
+    pickers.new(opts, {
+        prompt_title = "VmenuPicker",
+        finder = finders.new_table {
+            results = vim.fn['vmenu#queryItems']({}),
+
+            entry_maker = function(entry)
+                return {
+                    value = entry,
+                    display = entry.path,
+                    ordinal = entry.path,
+                }
+            end
+        },
+        sorter = conf.generic_sorter(opts),
+        attach_mappings = function(prompt_bufnr, map)
+            actions.select_default:replace(function()
+                actions.close(prompt_bufnr)
+                local selection = action_state.get_selected_entry()
+                --print(vim.inspect(selection))
+                vim.fn['vmenu#executeItemById'](selection.value.id)
+            end)
+            return true
+        end,
+    }):find()
+end
+
+-- to execute the function
+VmenuPicker(require("telescope.themes").get_dropdown{})
 ```
 
 * if you want a more flexible way to control vmenu item show status or deactive status, you can
