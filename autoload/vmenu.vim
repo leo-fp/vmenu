@@ -479,7 +479,7 @@ function! s:filterQueryableItems(itemList, editorStatus)
             continue
         endif
 
-        if contextItem.subItemList->empty()
+        if contextItem.subItemList->empty() && !empty(contextItem.cmd)
             call add(activeItems, deepcopy(contextItem, 1))
         else
             call extend(activeItems,
@@ -3007,8 +3007,8 @@ if 0
     if 1
         call vmenu#cleanTopMenu()
         call s:VMenuManager.initTopMenuItems('&1', [
-                    \vmenu#parse_context([#{name: '2', cmd: '', subItemList: [#{name: '3', cmd: ''}]}], g:VMENU#ITEM_VERSION.VMENU)[0],
-                    \ [ "vim-quickui item name", '', ""]
+                    \vmenu#parse_context([#{name: '2', cmd: ' ', subItemList: [#{name: '3', cmd: ' '}]}], g:VMENU#ITEM_VERSION.VMENU)[0],
+                    \ [ "vim-quickui item name", ' ', ""]
                     \]
                     \)
         call s:TopMenuWindow.builder()
@@ -3031,7 +3031,7 @@ if 0
         let s:VMenuManager.parsedContextItemList = []
         call vmenu#cleanTopMenu()
         call s:VMenuManager.initTopMenuItems('1', vmenu#parse_context([
-                    \#{name: '2', cmd: '', subItemList: [#{name: '3', cmd: ''}]},
+                    \#{name: '2', cmd: '', subItemList: [#{name: '3', cmd: ' '}]},
                     \], g:VMENU#ITEM_VERSION.VMENU))
         call s:TopMenuWindow.builder()
                     \.topMenuItemList(s:VMenuManager.__allTopMenuItemList)
@@ -3046,8 +3046,8 @@ if 0
     if 1
         let s:VMenuManager.parsedContextItemList = []
         call vmenu#installContextMenu([
-            \ ["vim-quickui item", ''],
-            \ vmenu#parse_context([#{name: "vmenu item", cmd: "", subItemList: [#{name: '1', cmd: ''}]}], g:VMENU#ITEM_VERSION.VMENU)[0]
+            \ ["vim-quickui item", ' '],
+            \ vmenu#parse_context([#{name: "vmenu item", cmd: " ", subItemList: [#{name: '1', cmd: ' '}]}], g:VMENU#ITEM_VERSION.VMENU)[0]
             \])
         call assert_equal(2, vmenu#queryItems({})->len())
         call assert_true(-1 != indexof(vmenu#queryItems({}), {i, v -> v.path == "vim-quickui item"}))
@@ -3058,12 +3058,12 @@ if 0
     if 1
         let s:VMenuManager.parsedContextItemList = []
         call vmenu#installContextMenu([
-                    \ ["vim-quickui item", ''],
+                    \ ["vim-quickui item", ' '],
                     \ vmenu#parse_context([
-                    \   #{name: "2", cmd: "", subItemList: [#{name: '2.1', cmd: '', show-mode: ['n']}]},
+                    \   #{name: "2", cmd: " ", subItemList: [#{name: '2.1', cmd: ' ', show-mode: ['n']}]},
                     \], g:VMENU#ITEM_VERSION.VMENU)[0],
                     \ vmenu#parse_context([
-                    \   #{name: "3", cmd: "", subItemList: [#{name: '3.1', cmd: '', show-mode: ['v']}]},
+                    \   #{name: "3", cmd: " ", subItemList: [#{name: '3.1', cmd: ' ', show-mode: ['v']}]},
                     \], g:VMENU#ITEM_VERSION.VMENU)[0]
                     \])
         let items = vmenu#queryItems(#{curMode: 'v'})
@@ -3099,6 +3099,17 @@ if 0
         call vmenu#installContextMenu(vmenu#parse_context([
                     \#{name: '1', deactive-if: function('s:alwaysTruePredicate'), subItemList: [#{name: '1.1', cmd: ''}]}
                     \], g:VMENU#ITEM_VERSION.VMENU))
+        call assert_equal(0, vmenu#queryItems({})->len())
+    endif
+
+    " if the 'cmd' filed of an item is empty, it should not be queryable
+    if 1
+        let s:VMenuManager.parsedContextItemList = []
+        let s:testList = []
+        call vmenu#installContextMenu([vmenu#parse_context([
+                    \ #{name: '1', onFocus: ''},
+                    \], g:VMENU#ITEM_VERSION.VMENU)[0]
+                    \])
         call assert_equal(0, vmenu#queryItems({})->len())
     endif
 
