@@ -172,6 +172,7 @@ call vmenu#openContextWindow(vmenu#parse_context([
 
 
 * fuzzy picker support
+
 telescope.nvim
 
 ![telescope.nvim](./screenshot/picker.png)
@@ -213,6 +214,22 @@ end
 
 -- to execute the function
 VmenuPicker(require("telescope.themes").get_dropdown{})
+```
+
+* If you want to auto-complete most of a command.
+
+```vim
+let content = vmenu#parse_context([
+            \#{name: 'save to somewhere', cmd: { -> feedkeys(':saveas ~/somewhere/') } },
+            \], g:VMENU#ITEM_VERSION.VMENU)
+call vmenu#openContextWindow(content, {})
+```
+
+* enable mouse hover
+
+```vim
+    :set mousemoveevent
+    :let g:vmenu_enable_mouse_hover = 1
 ```
 
 * if you want a more flexible way to control vmenu item show status or deactive status, you can
