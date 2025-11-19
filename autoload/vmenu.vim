@@ -483,8 +483,7 @@ function! s:filterQueryableItems(itemList, editorStatus)
             call add(activeItems, deepcopy(contextItem, 1))
         else
             call extend(activeItems,
-                        \ s:filterQueryableItems(
-                        \   s:flattenVmenuItemList(contextItem.subItemList), a:editorStatus)
+                        \ s:filterQueryableItems(contextItem.subItemList, a:editorStatus)
                         \ )
         endif
     endfor
@@ -793,18 +792,6 @@ function! s:initItemPathRecursively(contextItem, parentPath, separatorChar=s:ITE
     for item in a:contextItem.subItemList
         call s:initItemPathRecursively(item, a:contextItem.path)
     endfor
-endfunction
-
-function! s:flattenVmenuItemList(vmenuItemList)
-    let res = []
-    for item in a:vmenuItemList
-        call add(res, item)
-        if !item.subItemList->empty()
-            call extend(res, s:flattenVmenuItemList(item.subItemList))
-        endif
-    endfor
-
-    return res
 endfunction
 
 "-------------------------------------------------------------------------------
@@ -3097,7 +3084,8 @@ if 0
     if 1
         let s:VMenuManager.parsedContextItemList = []
         call vmenu#installContextMenu(vmenu#parse_context([
-                    \#{name: '1', deactive-if: function('s:alwaysTruePredicate'), subItemList: [#{name: '1.1', cmd: ''}]}
+                    \#{name: '1', deactive-if: function('s:alwaysTruePredicate'), subItemList: [#{name: '1.1', cmd: ''}]},
+                    \#{name: '2', subItemList: [#{name: '2.1', deactive-if: function('s:alwaysTruePredicate'), subItemList: [#{name: '2.1.1', cmd: ' '}]}]}
                     \], g:VMENU#ITEM_VERSION.VMENU))
         call assert_equal(0, vmenu#queryItems({})->len())
     endif
