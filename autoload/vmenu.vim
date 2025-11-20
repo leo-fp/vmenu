@@ -1178,7 +1178,7 @@ function! s:ItemParser.parseVMenuItem(userItem)
             call add(subItemList, s:ItemParser.parseVMenuItem(item))
         endfor
     endif
-    let VisiblePredicate = function('s:alwaysTruePredicate')
+    let VisiblePredicate = { -> 1 } " true by default
     if has_key(a:userItem, 'show-mode')
         let VisiblePredicate = s:createModePredicate(get(a:userItem, 'show-mode'))
     endif
@@ -1190,7 +1190,7 @@ function! s:ItemParser.parseVMenuItem(userItem)
         let VisiblePredicate = get(a:userItem, 'show-if')
     endif
 
-    let DeactivePredicate = function('s:alwaysFalsePredicate')
+    let DeactivePredicate = { -> 0 }    " false by default
     if has_key(a:userItem, 'deactive-mode')
         let DeactivePredicate = s:createModePredicate(get(a:userItem, 'deactive-mode'))
     endif
@@ -1253,8 +1253,8 @@ function! s:ItemParser.parseQuickuiItem(quickuiItem)
         " cmd is useless if there are second menu
         let cmd = ''
     endif
-    let VisiblePredicate = function('s:alwaysTruePredicate')
-    let DeactivePredicate = function('s:alwaysFalsePredicate')
+    let VisiblePredicate = { -> 1 }
+    let DeactivePredicate = { -> 0 }
 
     return s:ContextItem.new(
                 \#{name: name,
@@ -1423,14 +1423,6 @@ endfunction
 
 function! s:createFileTypePredicate(fileTypes)
     return { editorStatus -> index(a:fileTypes, editorStatus['currentFileType']) != -1}
-endfunction
-
-function! s:alwaysFalsePredicate(editorStatus)
-    return 0
-endfunction
-
-function! s:alwaysTruePredicate(editorStatus)
-    return 1
 endfunction
 
 
@@ -1865,7 +1857,7 @@ if 0
         call s:ContextWindow.builder()
                     \.contextItemList(s:VMenuManager.parseContextItem([
                     \#{name: 'a', cmd: 'echom 1'},
-                    \#{name: 'b', cmd: 'echo 1', tip: 'tip', icon: '', deactive-if: function("s:alwaysTruePredicate")},
+                    \#{name: 'b', cmd: 'echo 1', tip: 'tip', icon: '', deactive-if: { -> 1 }},
                     \#{name: 'c', cmd: 'echom 1'},
                     \], g:VMENU#ITEM_VERSION.VMENU))
                     \.build()
@@ -1954,7 +1946,7 @@ if 0
         call s:ContextWindow.builder()
                     \.contextItemList(s:VMenuManager.parseContextItem([
                     \#{name: '1', cmd: ''},
-                    \#{name: '&A', cmd: '', tip: '', icon: '', deactive-if: function("s:alwaysTruePredicate")}
+                    \#{name: '&A', cmd: '', tip: '', icon: '', deactive-if: { -> 1 }}
                     \], g:VMENU#ITEM_VERSION.VMENU))
                     \.build()
                     \.showAtCursor()
@@ -2047,7 +2039,7 @@ if 0
                     \.contextItemList(s:VMenuManager.parseContextItem([
                     \#{name: '1', cmd: ''},
                     \#{name: '2', cmd: ''},
-                    \#{name: 'INACTIVE ITEM', cmd: '', deactive-if: function('s:alwaysTruePredicate')}
+                    \#{name: 'INACTIVE ITEM', cmd: '', deactive-if: { -> 1 }}
                     \], g:VMENU#ITEM_VERSION.VMENU))
                     \.build()
                     \.showAtCursor()
@@ -2067,10 +2059,10 @@ if 0
     " show-if test
     if 1
         call assert_equal(1, s:filterVisibleItems(s:VMenuManager.parseContextItem([
-                    \#{name: 'b', cmd: 'echo 1', tip: 'tip', icon: '', show-if: function('s:alwaysTruePredicate')}
+                    \#{name: 'b', cmd: 'echo 1', tip: 'tip', icon: '', show-if: { -> 1 }}
                     \], g:VMENU#ITEM_VERSION.VMENU), #{currentMode: "n"})->len())
         call assert_equal(0, s:filterVisibleItems(s:VMenuManager.parseContextItem([
-                    \#{name: 'b', cmd: 'echo 1', tip: 'tip', icon: '', show-if: function('s:alwaysFalsePredicate')}
+                    \#{name: 'b', cmd: 'echo 1', tip: 'tip', icon: '', show-if: { -> 0 }}
                     \], g:VMENU#ITEM_VERSION.VMENU), #{currentMode: "n"})->len())
     endif
 
@@ -2116,7 +2108,7 @@ if 0
     if 1
         call s:ContextWindow.builder()
                     \.contextItemList(s:VMenuManager.parseContextItem([
-                    \#{name: 'inactive in normal mode', cmd: 'echo 1', tip: 'tip', icon: '', deactive-if: function("s:alwaysTruePredicate")}
+                    \#{name: 'inactive in normal mode', cmd: 'echo 1', tip: 'tip', icon: '', deactive-if: { -> 1 }}
                     \], g:VMENU#ITEM_VERSION.VMENU))
                     \.build()
                     \.showAtCursor()
@@ -2129,7 +2121,7 @@ if 0
         let s:errorList = []
         call s:ContextWindow.builder()
                     \.contextItemList(s:VMenuManager.parseContextItem([
-                    \#{name: 'inactive item', cmd: 'echom 6', tip: 'tip', icon: '', deactive-if: function("s:alwaysTruePredicate")}
+                    \#{name: 'inactive item', cmd: 'echom 6', tip: 'tip', icon: '', deactive-if: { -> 1 }}
                     \], g:VMENU#ITEM_VERSION.VMENU))
                     \.errConsumer({ msg -> add(s:errorList, msg) })
                     \.build()
@@ -2146,7 +2138,7 @@ if 0
         call s:ContextWindow.builder()
                     \.contextItemList(s:VMenuManager.parseContextItem([
                     \#{name: 'name', cmd: '', tip: '', icon: ''},
-                    \#{name: '&inactive item', cmd: '', tip: '', icon: '', deactive-if: function("s:alwaysTruePredicate")}
+                    \#{name: '&inactive item', cmd: '', tip: '', icon: '', deactive-if: { -> 1 }}
                     \], g:VMENU#ITEM_VERSION.VMENU))
                     \.errConsumer({ msg -> add(s:errorList, msg) })
                     \.build()
@@ -2203,7 +2195,7 @@ if 0
         call s:ContextWindow.builder()
                     \.contextItemList(s:VMenuManager.parseContextItem([
                     \#{name: 'name', cmd: ''},
-                    \#{name: 'name2', cmd: '', deactive-if: function('s:alwaysTruePredicate')},
+                    \#{name: 'name2', cmd: '', deactive-if: { -> 1 }},
                     \#{name: 'name2', cmd: ''},
                     \], g:VMENU#ITEM_VERSION.VMENU))
                     \.build()
@@ -2218,7 +2210,7 @@ if 0
     if 1
         call s:ContextWindow.builder()
                     \.contextItemList(s:VMenuManager.parseContextItem([
-                    \#{name: '1', cmd: '', deactive-if: function('s:alwaysTruePredicate')},
+                    \#{name: '1', cmd: '', deactive-if: { -> 1 }},
                     \#{name: '2', cmd: ''},
                     \], g:VMENU#ITEM_VERSION.VMENU))
                     \.build()
@@ -3075,7 +3067,7 @@ if 0
     if 1
         let s:VMenuManager.parsedContextItemList = []
         call vmenu#installContextMenu(vmenu#parse_context([
-                    \#{name: '1', cmd: '', deactive-if: function('s:alwaysTruePredicate')}
+                    \#{name: '1', cmd: '', deactive-if: { -> 1 }}
                     \], g:VMENU#ITEM_VERSION.VMENU))
         call assert_equal(0, vmenu#queryItems({})->len())
     endif
@@ -3084,8 +3076,8 @@ if 0
     if 1
         let s:VMenuManager.parsedContextItemList = []
         call vmenu#installContextMenu(vmenu#parse_context([
-                    \#{name: '1', deactive-if: function('s:alwaysTruePredicate'), subItemList: [#{name: '1.1', cmd: ''}]},
-                    \#{name: '2', subItemList: [#{name: '2.1', deactive-if: function('s:alwaysTruePredicate'), subItemList: [#{name: '2.1.1', cmd: ' '}]}]}
+                    \#{name: '1', deactive-if: { -> 1 }, subItemList: [#{name: '1.1', cmd: ''}]},
+                    \#{name: '2', subItemList: [#{name: '2.1', deactive-if: { -> 1 }, subItemList: [#{name: '2.1.1', cmd: ' '}]}]}
                     \], g:VMENU#ITEM_VERSION.VMENU))
         call assert_equal(0, vmenu#queryItems({})->len())
     endif
