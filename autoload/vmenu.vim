@@ -1539,11 +1539,12 @@ endfunction
 "-------------------------------------------------------------------------------
 function! s:printWarn(msg)
     echohl WarningMsg | echo a:msg | echohl None
+    call s:log(a:msg, "WARN")
 endfunction
 
-function! s:log(msg)
+function! s:log(msg, level="INFO")
     if s:enable_log == 1
-        call s:echom(printf("%s %s", strftime("%T"), a:msg))
+        call s:echom(printf("%s [%s] %s", strftime("%T"), a:level, a:msg))
     endif
 endfunction
 
