@@ -1,12 +1,15 @@
 show-ft	vmenu.txt	/*show-ft*
 vmenu#cleanTopMenu()	vmenu.txt	/*vmenu#cleanTopMenu()*
+vmenu#executeItemById()	vmenu.txt	/*vmenu#executeItemById()*
 vmenu#existFileType()	vmenu.txt	/*vmenu#existFileType()*
+vmenu#installContextMenu()	vmenu.txt	/*vmenu#installContextMenu()*
 vmenu#installTopMenu()	vmenu.txt	/*vmenu#installTopMenu()*
 vmenu#itemTips()	vmenu.txt	/*vmenu#itemTips()*
 vmenu#matchRegex()	vmenu.txt	/*vmenu#matchRegex()*
 vmenu#openContextWindow()	vmenu.txt	/*vmenu#openContextWindow()*
 vmenu#openTopMenu()	vmenu.txt	/*vmenu#openTopMenu()*
 vmenu#parse_context()	vmenu.txt	/*vmenu#parse_context()*
+vmenu#queryItems()	vmenu.txt	/*vmenu#queryItems()*
 vmenu-Functions	vmenu.txt	/*vmenu-Functions*
 vmenu-changelog	vmenu.txt	/*vmenu-changelog*
 vmenu-cmd	vmenu.txt	/*vmenu-cmd*
