@@ -36,6 +36,7 @@ let g:VMENU#ITEM_VERSION = #{QUICKUI: 1, VMENU: 2}
 let s:enable_log = get(g:, "vmenu_enable_log", 0)
 let s:enable_echo_tips = get(g:, "vmenu_enable_echo_tips", 1)
 let s:enable_mouse_hover = get(g:, "vmenu_enable_mouse_hover", 0)
+let s:min_context_menu_width = get(g:, "vmenu_min_context_menu_width", 0)
 
 "-------------------------------------------------------------------------------
 " class HotKey
@@ -142,7 +143,7 @@ function! s:VmenuWindowBuilder.new()
     let vmenuWindowBuilder.__x                   = 0    " column number
     let vmenuWindowBuilder.__y                   = 0    " line number
     let vmenuWindowBuilder.__errConsumer = function("s:printWarn")
-    let vmenuWindowBuilder.__minWidth = 0   " minimal window width. only supported in context menu
+    let vmenuWindowBuilder.__minWidth = s:min_context_menu_width   " minimal window width. only supported in context menu
     let vmenuWindowBuilder.__editorStatusSupplier = function("s:getEditorStatus")
     let vmenuWindowBuilder.__scrollingWindowSize = 20    " the number of entries in the scrolling window
     return vmenuWindowBuilder
@@ -776,7 +777,7 @@ function! s:ContextItem.new(dict)
     let contextItem.isSep           = get(a:dict, 'isSep', 0)        " is seperator line. 0: false, 1: true
     let contextItem.descPos         = get(a:dict, 'descPos', -1)     " offset of shortKey
     let contextItem.descWidth       = get(a:dict, 'descWidth', 0)    " length of shortKey
-    let contextItem.stretchingIndex = -1    " the index for stretching. used for minWidth
+    let contextItem.stretchingIndex = strcharlen(contextItem.name)   " the index for stretching (contextItem.name[stretchingIndex-1] is the last char of item name). used for minWidth
     let contextItem.syntaxRegionList       = [] " [[highlight, start (inclusive), end (exclusive)]]
     let contextItem.itemVersion     = get(a:dict, 'itemVersion', 0)  " context item version. see: g:VMENU#ITEM_VERSION
     let contextItem.group           = get(a:dict, 'group', '')  " group name of current item
@@ -1281,7 +1282,7 @@ function! s:ItemParser.__fillNameToSameLength(contextItemList)
         if strcharlen(contextItem.name) < maxNameLen
             let contextItem.name = contextItem.name .. repeat(' ', maxNameLen - strcharlen(contextItem.name))
         endif
-        let contextItem.stretchingIndex = maxNameLen
+        "let contextItem.stretchingIndex = strcharlen(contextItem.name)
     endfor
     return workingContextItemList
 endfunction
@@ -1623,6 +1624,7 @@ if 0
 
     let v:errors = []
     let s:enable_log = 0
+    let s:min_context_menu_width = 0
 
     " vmenu item parse test
     if 0
@@ -2291,13 +2293,14 @@ if 0
     if 1
         call s:ContextWindow.builder()
                     \.contextItemList(s:VMenuManager.parseContextItem([
-                    \#{name: '1', cmd: ''},
+                    \#{name: "1\t>", cmd: ''},
                     \], g:VMENU#ITEM_VERSION.VMENU))
-                    \.minWidth(10)
+                    \.minWidth(20)
                     \.build()
                     \.showAtCursor()
-        call assert_equal(10, s:VMenuManager.__focusedWindow.winWidth)
-        call assert_equal('   1      ', s:VMenuManager.__focusedWindow.getCurItem().name)
+        call assert_equal(20, s:VMenuManager.__focusedWindow.winWidth)
+        "------------------01234567890123456789
+        call assert_equal('   1             >  ', s:VMenuManager.__focusedWindow.getCurItem().name)
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
 
         " seperator line
@@ -2310,7 +2313,21 @@ if 0
                     \.build()
                     \.showAtCursor()
         call assert_equal(10, s:VMenuManager.__focusedWindow.winWidth)
+        "------------------0123456789
+        call assert_equal(" ———————— ", s:VMenuManager.__focusedWindow.contextItemList[0].name)
         call assert_equal("1", s:VMenuManager.__focusedWindow.getCurItem().name->trim())
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+
+        " withth is negative
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \#{name: "1", cmd: ''},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.minWidth(-10)
+                    \.build()
+                    \.showAtCursor()
+        "------------------012345
+        call assert_equal('   1  ', s:VMenuManager.__focusedWindow.getCurItem().name)
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
     endif
 
