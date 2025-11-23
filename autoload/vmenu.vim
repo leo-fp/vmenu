@@ -2358,7 +2358,6 @@ if 0
                     \#{name: 'name2', cmd: '', show-mode: ['n']},
                     \], g:VMENU#ITEM_VERSION.VMENU))
                     \.editorStatusSupplier({ -> #{currentMode: 'v' } })
-                    \.minWidth(10)
                     \.build()
                     \.showAtCursor()
         call assert_equal(1, s:VMenuManager.__focusedWindow.contextItemList->len())
@@ -2369,7 +2368,6 @@ if 0
                     \#{name: 'name', cmd: '', show-mode: ['v']},
                     \], g:VMENU#ITEM_VERSION.VMENU))
                     \.editorStatusSupplier({ -> #{currentMode: 'v' } })
-                    \.minWidth(10)
                     \.build()
                     \.showAtCursor()
         call assert_equal(1, s:VMenuManager.__focusedWindow.contextItemList->len())
@@ -2380,7 +2378,6 @@ if 0
                     \#{name: '1', cmd: '', subItemList: [#{name: '2', cmd: '', show-mode: ['v']}]},
                     \], g:VMENU#ITEM_VERSION.VMENU))
                     \.editorStatusSupplier({ -> #{currentMode: 'v' } })
-                    \.minWidth(10)
                     \.build()
                     \.showAtCursor()
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<CR>"))
