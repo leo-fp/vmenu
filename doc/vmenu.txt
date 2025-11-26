@@ -35,6 +35,7 @@ Version:	0.3.0
     6.1 g:vmenu_enable_log.............................|vmenu-vmenu_enable_log|
     6.2 g:vmenu_enable_echo_tips.......................|vmenu_enable_echo_tips|
     6.3 g:vmenu_enable_mouse_hover...................|vmenu_enable_mouse_hover|
+    6.4 g:vmenu_min_context_menu_width...........|vmenu_min_context_menu_width|
 7. vmenu Changelog............................................|vmenu-changelog|
 
 ==============================================================================
@@ -350,6 +351,12 @@ Disabled by default. If you want to enable it.
 >
     :set mousemoveevent
     :let g:vmenu_enable_mouse_hover = 1
+
+
+6.4 vmenu_min_context_menu_width                  *vmenu_min_context_menu_width*
+----------------------------------------
+Mininal cotext menu width.
+Effective for both context menu and dropdown menu of top menu.
 
 
 ==============================================================================
