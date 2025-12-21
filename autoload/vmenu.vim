@@ -93,11 +93,11 @@ function! s:MouseClickEvent.new(clickPos=#{screencol: -1, screenrow: -1})
 endfunction
 
 "-------------------------------------------------------------------------------
-" class SubMenuCloseEvent
+" class SubMenuClosedEvent
 "-------------------------------------------------------------------------------
-let s:SubMenuCloseEvent = {}
-function! s:SubMenuCloseEvent.new(closeCode, event)
-    let subMenuCloseEvent = deepcopy(s:SubMenuCloseEvent, 1)
+let s:SubMenuClosedEvent = {}
+function! s:SubMenuClosedEvent.new(closeCode, event)
+    let subMenuCloseEvent = deepcopy(s:SubMenuClosedEvent, 1)
     let subMenuCloseEvent.key = "VMENU_SUB_MENU_CLOSE"
     let subMenuCloseEvent.closeCode = a:closeCode
     let subMenuCloseEvent.event = deepcopy(a:event, 1)
@@ -265,7 +265,6 @@ function! s:VmenuWindow.executeByLeftMouse(mouseClickEvent)
     let clickedIdx = self.getClickedItemIndex(a:mouseClickEvent.mousepos)
     call s:log(self.winId .. " will focus at: " .. clickedIdx)
 
-    " close all vmenu window
     if clickedIdx == -1
         call self.close(s:NOT_IN_AREA, a:mouseClickEvent)
     endif
@@ -291,7 +290,7 @@ function! s:VmenuWindow.close(closeCode, event={})
     let self.isOpen = 0
     call s:log("winid: " .. self.winId .. " closed")
     if has_key(self, 'parentVmenuWindow') && !empty(self.parentVmenuWindow)
-        call self.parentVmenuWindow.handleEvent(s:SubMenuCloseEvent.new(a:closeCode, a:event))
+        call self.parentVmenuWindow.handleEvent(s:SubMenuClosedEvent.new(a:closeCode, a:event))
     endif
 
     " root window, stop getting user input
@@ -441,9 +440,9 @@ function! s:ContextWindow.new(contextWindowBuilder)
     let actionMap[a:contextWindowBuilder.__goPreviousKey] = { event -> function(contextWindow.focusPrev,          [], contextWindow) }
     let actionMap[a:contextWindowBuilder.__goBottomKey]   = { event -> function(contextWindow.focusBottom,        [], contextWindow) }
     let actionMap[a:contextWindowBuilder.__confirmKey]    = { event -> function(contextWindow.enter,              [], contextWindow) }
-    let actionMap["\<LeftMouse>"]                         = { event -> function(contextWindow.executeByLeftMouse, [event], contextWindow) }
-    let actionMap["VMENU_MOUSE_HOVER"]                    = { event -> function(contextWindow.__onMouseHover,     [event], contextWindow) }
-    let actionMap["VMENU_SUB_MENU_CLOSE"]                 = { event -> function(contextWindow.__onSubMenuClose,   [event.closeCode, event.event], contextWindow) }
+    let actionMap["\<LeftMouse>"]                         = { mouseClickEvent -> function(contextWindow.executeByLeftMouse, [mouseClickEvent], contextWindow) }
+    let actionMap["VMENU_MOUSE_HOVER"]                    = { mouseHoverEvent -> function(contextWindow.__onMouseHover,     [mouseHoverEvent], contextWindow) }
+    let actionMap["VMENU_SUB_MENU_CLOSE"]                 = { subMenuClosedEvent -> function(contextWindow.__onSubMenuClose,   [subMenuClosedEvent.closeCode, subMenuClosedEvent.event], contextWindow) }
     let actionMap["VMENU_RECURSIVE_CLOSE"]                      = { event -> function(contextWindow.close,   [s:RECURSIVE_CLOSE, {}], contextWindow) }
     for hotKey in contextWindow.hotKeyList
         let actionMap[hotKey.keyChar] = { event -> function(contextWindow.executeByHotKey, [event.key], contextWindow) }
