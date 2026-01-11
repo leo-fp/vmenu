@@ -1,6 +1,6 @@
 "MIT License
 "
-"Copyright (c) 2025 leo-fp
+"Copyright (c) 2025-2026 leo-fp
 "
 "Permission is hereby granted, free of charge, to any person obtaining a copy
 "of this software and associated documentation files (the "Software"), to deal
@@ -126,6 +126,7 @@ hi! VmenuHotkey1 gui=underline guifg=#BEC0C6
 hi! VmenuSelectedHotkey gui=underline guibg=#2E436E guifg=#BEC0C6
 hi! VmenuInactiveHotKey gui=underline guifg=#4D5360
 hi! VmenuScrollbar guibg=#4D4D4F
+hi! VmenuDocWindow guifg=#BEC0C6 guibg=#565656
 
 "-------------------------------------------------------------------------------
 " class VmenuWindowBuilder
@@ -192,11 +193,12 @@ function! s:VmenuWindowBuilder.build()
 endfunction
 
 "-------------------------------------------------------------------------------
-" class VmenuWindow. base class
+" class VmenuWindow implements dumpText. base class
 "-------------------------------------------------------------------------------
 let s:VmenuWindow = {}
 function! s:VmenuWindow.new()
     let vmenuWindow = deepcopy(s:VmenuWindow, 1)
+    let vmenuWindow.dumpText = function("s:dumpText")
     let vmenuWindow.hotKeyList = []
     let vmenuWindow.isOpen = 0
     let vmenuWindow.x = -1 " column number
@@ -215,6 +217,7 @@ function! s:VmenuWindow.new()
     let vmenuWindow.__componentLength = 0
     let vmenuWindow.parentVmenuWindow = {}  " parent vmenu window instance
     let vmenuWindow.subVmenuWindow = {}     " sub vmenu window instance"
+    let vmenuWindow.docWindow = {}          " doc window instance
     return vmenuWindow
 endfunction
 function! s:VmenuWindow.focusNext()
@@ -288,6 +291,9 @@ function! s:VmenuWindow.close(closeCode, event={})
 
     call self.quickuiWindow.close()
     let self.isOpen = 0
+    if !empty(self.docWindow)
+        call self.docWindow.close()
+    endif
     call s:log("winid: " .. self.winId .. " closed")
     if has_key(self, 'parentVmenuWindow') && !empty(self.parentVmenuWindow)
         call self.parentVmenuWindow.handleEvent(s:SubMenuClosedEvent.new(a:closeCode, a:event))
@@ -432,6 +438,7 @@ function! s:ContextWindow.new(contextWindowBuilder)
     let contextWindow.__editorStatusSupplier = a:contextWindowBuilder.__editorStatusSupplier
     let contextWindow.isOpen = 0
     let contextWindow.parentVmenuWindow = a:contextWindowBuilder.__parentContextWindow
+    let contextWindow.docWindow = {}
     call s:log(printf("new ContextWindow created, winId: %s", contextWindow.winId))
 
     let actionMap = {}
@@ -563,6 +570,7 @@ function! s:ContextWindow.focusItemByIndex(index)
     call self.__renderHighlight(a:index)
     call self.__triggerStatuslineRefresh()
     call self.__echoTipsIfEnabled()
+    call self.__openDocWindowIfAvaliable()
     call self.__executeCmdField("onFocus")
     redraw
 endfunction
@@ -752,6 +760,20 @@ function! s:ContextWindow.__renderHighlight(offset)
     call win.syntax_end()
 endfunction
 
+function! s:ContextWindow.__openDocWindowIfAvaliable()
+    " close old doc window
+    if !empty(self.docWindow) && self.docWindow.isOpen == 1
+        call self.docWindow.close()
+    endif
+
+    if !empty(self.getCurItem().doc) && empty(self.getCurItem().subItemList)
+        let docWindow = s:DocWindow.new(self.getCurItem().doc, self)
+        let [x, y] = self.__calcExpandPos(docWindow.winWidth)
+        call docWindow.showAt(x, y)
+        let self.docWindow = docWindow
+    endif
+endfunction
+
 
 "-------------------------------------------------------------------------------
 " class ContextItem
@@ -780,6 +802,7 @@ function! s:ContextItem.new(dict)
     let contextItem.syntaxRegionList       = [] " [[highlight, start (inclusive), end (exclusive)]]
     let contextItem.itemVersion     = get(a:dict, 'itemVersion', 0)  " context item version. see: g:VMENU#ITEM_VERSION
     let contextItem.group           = get(a:dict, 'group', '')  " group name of current item
+    let contextItem.doc             = get(a:dict, 'doc', '')  " document text of current item
     return contextItem
 endfunction
 
@@ -910,9 +933,6 @@ function! s:TopMenuWindow.focusItemByIndex(index)
     call self.__renderHighlight(self.__curItemIndex)
     redraw
 endfunction
-function! s:TopMenuWindow.getFocusedItemTips()
-    return ''
-endfunction
 function! s:TopMenuWindow.enter()
     let subWindow = self.__expand()
     if !empty(subWindow)
@@ -1006,6 +1026,58 @@ function! s:TopMenuWindow.getClickedItemIndex(mousePos)
     return -1
 endfunction
 
+"-------------------------------------------------------------------------------
+" class DocWindow implements dumpText, getFocusedItemTips
+"-------------------------------------------------------------------------------
+let s:DocWindow = {}
+function! s:DocWindow.new(textList, parentVmenuWindow)
+    let docWindow = deepcopy(s:DocWindow, 1)
+    let docWindow.getFocusedItemTips = function("s:getFocusedItemTips")
+    let docWindow.isOpen = 0
+    let docWindow.textList = a:textList
+    let docWindow.parentVmenuWindow = a:parentVmenuWindow
+    let docWindow.__actionMap = {}
+    let docWindow.winId = rand(srand())
+
+    " visible window width. max width in text list
+    let docWindow.winWidth = reduce(a:textList, { acc, val -> max([acc, strcharlen(val)]) }, 0)
+
+    " visible window height
+    let docWindow.winHeight = len(a:textList)
+    return docWindow
+endfunction
+function! s:DocWindow.showAt(x, y)
+    let opts = {}
+    let opts.w = self.winWidth
+    let opts.h = self.winHeight
+    let opts.padding = [0, 1, 0, 1]
+    let opts.x = a:x
+    let opts.y = a:y
+    let opts.color = "VmenuDocWindow"
+
+    let win = quickui#window#new()
+    call win.open(self.textList, opts)
+
+    let self._window = win
+    let self.isOpen = 1
+    let self.x = win.x " column number
+    let self.y = win.y " line number
+
+    call self._window.show(1)
+
+    call s:VMenuManager.setFocusedWindow(self)
+    redraw
+endfunction
+function! s:DocWindow.handleEvent(inputEvent)
+    call self.parentVmenuWindow.handleEvent(a:inputEvent)
+endfunction
+function! s:DocWindow.dumpText()
+    return self._window.text
+endfunction
+function! s:DocWindow.close()
+    call self._window.close()
+    let self.isOpen = 0
+endfunction
 
 "-------------------------------------------------------------------------------
 " class EditorStatus
@@ -1172,6 +1244,7 @@ function! s:ItemParser.parseVMenuItem(userItem)
     let descPos   = -1    " will be calculated when context window created
     let descWidth = get(quickuiItem, 'desc_width', 0)
     let group     = get(a:userItem, 'group', '')
+    let doc       = get(a:userItem, 'doc', '')
     let subItemList = []
     if (has_key(a:userItem, 'subItemList'))
         for item in get(a:userItem, 'subItemList')
@@ -1218,6 +1291,7 @@ function! s:ItemParser.parseVMenuItem(userItem)
                 \descWidth: descWidth,
                 \group: group,
                 \onFocus: OnFocus,
+                \doc: doc,
                 \})
 endfunction
 function! s:ItemParser.parseQuickuiItem(quickuiItem)
@@ -1588,6 +1662,20 @@ endfunction
 
 " only used in testing
 let s:errorList = []
+
+
+"-------------------------------------------------------------------------------
+" interface
+"-------------------------------------------------------------------------------
+" get the text list in the window
+function! s:dumpText() dict
+    return ""
+endfunction
+
+function! s:getFocusedItemTips() dict
+    return ""
+endfunction
+
 
 "-------------------------------------------------------------------------------
 " test
@@ -3118,6 +3206,42 @@ if 0
         let items = vmenu#queryItems({})
         call vmenu#executeItemById(items[0].id)
         call assert_true(index(s:testList, '8d14530b-8381-44ac-821a-f95a1b556d69') != -1)
+    endif
+
+    " doc window test
+    if 1
+        let v:errors = []
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \ #{name: '1', cmd: ' ', doc: ["hello", "vmenu"]},
+                    \ #{name: '2', cmd: ' ', doc: ["hello", "vmenu2"]},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.build()
+                    \.showAtCursor()
+        "call s:VMenuManager.startListening()
+        let docWindow1 = s:VMenuManager.__focusedWindow
+        call assert_equal(["hello", "vmenu"], docWindow1.dumpText())
+        call docWindow1.handleEvent(s:KeyStrokeEvent.new("j"))
+        call assert_equal(["hello", "vmenu2"], s:VMenuManager.__focusedWindow.dumpText())
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+        call assert_equal(0, s:VMenuManager.__focusedWindow.isOpen)
+        call assert_equal(0, s:VMenuManager.__focusedWindow.parentVmenuWindow.isOpen)
+        call assert_equal(0, docWindow1.isOpen)
+    endif
+
+    " if both the doc and subItemList are present, doc window should not be displayed
+    if 1
+        let v:errors = []
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \ #{name: '1', doc: ["hello", "vmenu"], subItemList: [#{name: '1.1', cmd: ''}]},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.build()
+                    \.showAtCursor()
+        "call s:VMenuManager.startListening()
+        call assert_equal("1", s:VMenuManager.__focusedWindow.getCurItem().name->trim())
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+        call assert_equal(0, s:VMenuManager.__focusedWindow.isOpen)
     endif
 
     call s:showErrors()

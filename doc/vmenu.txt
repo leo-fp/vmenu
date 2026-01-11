@@ -30,6 +30,7 @@ Version:	0.3.0
     4.10 subItemList........................................|vmenu-subItemList|
     4.11 group....................................................|vmenu-group|
     4.12 onFocus................................................|vmenu-onFocus|
+    4.13 doc........................................................|vmenu-doc|
 5. vmenu Tips and Tricks................................|vmenu-tips-and-tricks|
 6. global variables....................................|vmenu-global-variables|
     6.1 g:vmenu_enable_log.............................|vmenu-vmenu_enable_log|
@@ -316,6 +317,25 @@ Example:
 >
     #{name: 'name', cmd: 'echo 1', onFocus: 'echo 2'},
     #{name: "name", cmd: 'echo 2', onFocus: { callbackItemParam, editorStatus -> execute("echom 'hello'", "") }}
+
+4.13 doc                                                             *vmenu-doc*
+----------------------------------------
+The document text you want to show when focusing the item.
+This is somewhat similar to "tip" field, but the text is displayed in a
+child window.
+Currently, the doc window is not interactive. New features are coming soon.
+
+Example:
+>
+    #{name: 'show doc', doc: ["Lorem ipsum dolor sit amet",
+    \"consectetur adipisicing elit",
+    \"sed do eiusmod tempor incididunt ut labore et dolore magna aliqua",
+    \"Ut enim ad minim veniam",
+    \"quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat",
+    \"Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur",
+    \"Excepteur sint occaecat cupidatat non proident",
+    \"sunt in culpa qui officia deserunt mollit anim id est laborum" ]},
+
 
 ==============================================================================
 5. vmenu Tips and Tricks						         *vmenu-tips-and-tricks*
