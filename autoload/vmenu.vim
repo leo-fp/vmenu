@@ -418,7 +418,7 @@ function! s:ContextWindow.new(contextWindowBuilder)
     let contextWindow.quickuiWindow = quickui#window#new()
     let contextWindow.winId = rand(srand())
     let contextWindow.hotKeyList = []
-    let contextWindow.winWidth = strcharlen(empty(contextWindow.contextItemList) ? 0 : contextWindow.contextItemList[0].name)
+    let contextWindow.winWidth = strwidth(empty(contextWindow.contextItemList) ? 0 : contextWindow.contextItemList[0].name)
     let contextWindow.winHeight = contextWindow.contextItemList->len()
     let contextWindow.scrollingWindowSize = min([a:contextWindowBuilder.__scrollingWindowSize, contextWindow.winHeight])
     let contextWindow.renderStartIdx = 0
@@ -566,6 +566,7 @@ function! s:ContextWindow.isInArea(x, y)
 endfunction
 
 function! s:ContextWindow.focusItemByIndex(index)
+    call s:VMenuManager.setFocusedWindow(self)
     let self.__curItemIndex = a:index
     call self.__renderHighlight(a:index)
     call self.__triggerStatuslineRefresh()
@@ -798,7 +799,7 @@ function! s:ContextItem.new(dict)
     let contextItem.isSep           = get(a:dict, 'isSep', 0)        " is seperator line. 0: false, 1: true
     let contextItem.descPos         = get(a:dict, 'descPos', -1)     " offset of shortKey
     let contextItem.descWidth       = get(a:dict, 'descWidth', 0)    " length of shortKey
-    let contextItem.stretchingIndex = strcharlen(contextItem.name)   " the index for stretching (contextItem.name[stretchingIndex-1] is the last char of item name). used for minWidth
+    let contextItem.stretchingIndex = strwidth(contextItem.name)   " the index for stretching (contextItem.name[stretchingIndex-1] is the last char of item name). used for minWidth
     let contextItem.syntaxRegionList       = [] " [[highlight, start (inclusive), end (exclusive)]]
     let contextItem.itemVersion     = get(a:dict, 'itemVersion', 0)  " context item version. see: g:VMENU#ITEM_VERSION
     let contextItem.group           = get(a:dict, 'group', '')  " group name of current item
@@ -963,7 +964,7 @@ endfunction
 " calculate start column to render focused top menu item
 function! s:TopMenuWindow.__getStartColumnNrByIndex(index)
     return a:index == 0 ? 0
-                \: reduce(self.topMenuItemList[:a:index-1], { acc, val -> acc + strcharlen(val.name) }, 0)
+                \: reduce(self.topMenuItemList[:a:index-1], { acc, val -> acc + strwidth(val.name) }, 0)
 endfunction
 function! s:TopMenuWindow.__renderText()
     return reduce(self.topMenuItemList, { acc, val -> acc .. val.name }, '')
@@ -986,13 +987,13 @@ function! s:TopMenuWindow.__renderHighlight(offset)
     let item = self.topMenuItemList[a:offset]
     if self.topMenuItemList[a:offset].hotKeyPos == -1
         let startX = self.__getStartColumnNrByIndex(self.__curItemIndex)
-        call add(syntaxRegionList, ['VmenuSelect', startX, startX + strcharlen(self.getCurItem().name)])
+        call add(syntaxRegionList, ['VmenuSelect', startX, startX + strwidth(self.getCurItem().name)])
     else
         let startX = self.__getStartColumnNrByIndex(self.__curItemIndex) " start position in whole top menu window
         let endX = startX + item.hotKeyPos
         call add(syntaxRegionList, ['VmenuSelect', startX, endX])
         call add(syntaxRegionList, ["VmenuSelectedHotkey", endX, endX+1])
-        call add(syntaxRegionList, ["VmenuSelect", endX+1, startX+strcharlen(item.name)])
+        call add(syntaxRegionList, ["VmenuSelect", endX+1, startX+strwidth(item.name)])
     endif
     let item.syntaxRegionList = deepcopy(syntaxRegionList, 1)
     for syntax in syntaxRegionList
@@ -1040,7 +1041,7 @@ function! s:DocWindow.new(textList, parentVmenuWindow)
     let docWindow.winId = rand(srand())
 
     " visible window width. max width in text list
-    let docWindow.winWidth = reduce(a:textList, { acc, val -> max([acc, strcharlen(val)]) }, 0)
+    let docWindow.winWidth = reduce(a:textList, { acc, val -> max([acc, strwidth(val)]) }, 0)
 
     " visible window height
     let docWindow.winHeight = len(a:textList)
@@ -1350,12 +1351,12 @@ endfunction
 
 function! s:ItemParser.__fillNameToSameLength(contextItemList)
     let workingContextItemList = deepcopy(a:contextItemList, 1)
-    let maxNameLen = reduce(workingContextItemList, { acc, val -> max([acc, strcharlen(val.name)]) }, 0)
+    let maxNameLen = reduce(workingContextItemList, { acc, val -> max([acc, strwidth(val.name)]) }, 0)
     for contextItem in workingContextItemList
-        if strcharlen(contextItem.name) < maxNameLen
-            let contextItem.name = contextItem.name .. repeat(' ', maxNameLen - strcharlen(contextItem.name))
+        if strwidth(contextItem.name) < maxNameLen
+            let contextItem.name = contextItem.name .. repeat(' ', maxNameLen - strwidth(contextItem.name))
         endif
-        "let contextItem.stretchingIndex = strcharlen(contextItem.name)
+        "let contextItem.stretchingIndex = strwidth(contextItem.name)
     endfor
     return workingContextItemList
 endfunction
@@ -1364,8 +1365,8 @@ function! s:ItemParser.__concatenateShortKey(contextItemList)
     for contextItem in workingContextItemList
         let left = contextItem.name .. (empty(contextItem.shortKey) ? '' : "    ")
         let contextItem.name = left .. contextItem.shortKey
-        let contextItem.descPos = strcharlen(contextItem.shortKey) > 0 ?
-                    \ strcharlen(left) : -1 " adjust desc pos
+        let contextItem.descPos = strwidth(contextItem.shortKey) > 0 ?
+                    \ strwidth(left) : -1 " adjust desc pos
     endfor
     return workingContextItemList
 endfunction
@@ -1374,9 +1375,9 @@ function! s:ItemParser.__addPaddingInContextMenu(contextItemList)
     for contextItem in workingContextItemList
         let paddingLeft = '  '
         let contextItem.name = paddingLeft .. contextItem.name .. '  '
-        let contextItem.descPos = strcharlen(contextItem.shortKey) > 0 ?
-                    \ contextItem.descPos + strcharlen(paddingLeft) : -1 " adjust desc pos
-        let contextItem.stretchingIndex = contextItem.stretchingIndex + strcharlen(paddingLeft) " adjust stretching index
+        let contextItem.descPos = strwidth(contextItem.shortKey) > 0 ?
+                    \ contextItem.descPos + strwidth(paddingLeft) : -1 " adjust desc pos
+        let contextItem.stretchingIndex = contextItem.stretchingIndex + strwidth(paddingLeft) " adjust stretching index
         let contextItem.hotKeyPos = contextItem.hotKeyPos == -1 ? -1 : contextItem.hotKeyPos + 2
     endfor
     return workingContextItemList
@@ -1387,32 +1388,32 @@ function! s:ItemParser.__addPaddingInTopMenu(topMenuItemList, paddingStr)
         let padding = a:paddingStr
         let topMenuItem.name = padding .. topMenuItem.name .. padding
         let topMenuItem.hotKeyPos = topMenuItem.hotKeyPos != -1 ?
-                    \ topMenuItem.hotKeyPos + strcharlen(padding) : -1 " adjust desc pos
+                    \ topMenuItem.hotKeyPos + strwidth(padding) : -1 " adjust desc pos
     endfor
     return workingTopMenuList
 endfunction
 function! s:ItemParser.__addIcon(contextItemList)
     let workingContextItemList = deepcopy(a:contextItemList, 1)
-    let maxIconLen = reduce(workingContextItemList, { acc, val -> max([acc, strcharlen(val.icon)]) }, 0)
+    let maxIconLen = reduce(workingContextItemList, { acc, val -> max([acc, strwidth(val.icon)]) }, 0)
     for contextItem in workingContextItemList
-        let iconPart = contextItem.icon .. repeat(' ', maxIconLen-strcharlen(contextItem.icon)) .. ' '
+        let iconPart = contextItem.icon .. repeat(' ', maxIconLen-strwidth(contextItem.icon)) .. ' '
         let contextItem.name = iconPart .. contextItem.name
-        let contextItem.descPos = contextItem.descPos + strcharlen(iconPart)  " adjust desc pos
-        let contextItem.hotKeyPos = contextItem.hotKeyPos == -1 ? -1 : contextItem.hotKeyPos + strcharlen(iconPart)
-        let contextItem.stretchingIndex = contextItem.stretchingIndex == -1 ? -1 : contextItem.stretchingIndex + strcharlen(iconPart)
+        let contextItem.descPos = contextItem.descPos + strwidth(iconPart)  " adjust desc pos
+        let contextItem.hotKeyPos = contextItem.hotKeyPos == -1 ? -1 : contextItem.hotKeyPos + strwidth(iconPart)
+        let contextItem.stretchingIndex = contextItem.stretchingIndex == -1 ? -1 : contextItem.stretchingIndex + strwidth(iconPart)
     endfor
     return workingContextItemList
 endfunction
 function! s:ItemParser.__stretchingIfNeed(contextItemList, minWidth)
     let workingContextItemList = deepcopy(a:contextItemList, 1)
     for contextItem in workingContextItemList
-        let stretchingPart = repeat(' ', max([0, a:minWidth - strcharlen(contextItem.name)]))
+        let stretchingPart = repeat(' ', max([0, a:minWidth - strwidth(contextItem.name)]))
         let contextItem.name = strcharpart(contextItem.name, 0, contextItem.stretchingIndex)
                     \ .. stretchingPart
-                    \ .. strcharpart(contextItem.name, contextItem.stretchingIndex, strcharlen(contextItem.name))
-        let contextItem.descPos = strcharlen(contextItem.shortKey) > 0 ?
-                    \ contextItem.descPos + strcharlen(stretchingPart) : -1 " adjust desc pos
-        let contextItem.stretchingIndex = contextItem.stretchingIndex + strcharlen(stretchingPart) " adjust stretching index
+                    \ .. strcharpart(contextItem.name, contextItem.stretchingIndex, strwidth(contextItem.name))
+        let contextItem.descPos = strwidth(contextItem.shortKey) > 0 ?
+                    \ contextItem.descPos + strwidth(stretchingPart) : -1 " adjust desc pos
+        let contextItem.stretchingIndex = contextItem.stretchingIndex + strwidth(stretchingPart) " adjust stretching index
     endfor
     return workingContextItemList
 endfunction
@@ -1422,7 +1423,7 @@ function! s:ItemParser.__renderSeparatorLine(contextItemList)
         return workingContextItemList
     endif
 
-    let width = strcharlen(a:contextItemList[0].name)
+    let width = strwidth(a:contextItemList[0].name)
     for contextItem in workingContextItemList
         if (contextItem.isSep == 1)
             let contextItem.name = ' ' .. repeat('—', max([1, width-2])) .. ' '
@@ -1644,7 +1645,7 @@ endfunction
 
 function! s:executeCmd(Cmd, item, editorStatus)
     if type(a:Cmd) == v:t_string
-        if strcharlen(a:Cmd) > 0
+        if strwidth(a:Cmd) > 0
             call execute(a:Cmd)
         endif
     endif
@@ -3240,6 +3241,24 @@ if 0
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
         call assert_equal("1", s:VMenuManager.__focusedWindow.getCurItem().name->trim())
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+        call assert_equal(0, s:VMenuManager.__focusedWindow.isOpen)
+    endif
+
+    " test chinese text width in doc and context menu
+    if 1
+        let v:errors = []
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \ #{name: '1', doc: ["一二三", "四五六"]},
+                    \ #{name: '一二三', cmd: ''}
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.build()
+                    \.showAtCursor()
+        "call s:VMenuManager.startListening()
+        call assert_equal(6, s:VMenuManager.__focusedWindow.winWidth)
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("j"))
+        call assert_equal(11, s:VMenuManager.__focusedWindow.winWidth)
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
         call assert_equal(0, s:VMenuManager.__focusedWindow.isOpen)
     endif
