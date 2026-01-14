@@ -655,6 +655,11 @@ function! s:ContextWindow.__calcExpandPos(winWidth)
         let x = self.x - a:winWidth
     endif
 
+    " there are insufficient space on the left, move down one line to prevent obscuring current item
+    if x < 0
+        let y = y + 1
+    endif
+
     return [x, y]
 endfunction
 function! s:ContextWindow.__execute()
@@ -3261,6 +3266,21 @@ if 0
         call assert_equal(11, s:VMenuManager.__focusedWindow.winWidth)
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
         call assert_equal(0, s:VMenuManager.__focusedWindow.isOpen)
+    endif
+
+    " if the space on both left and right sides can not hold the doc window, the doc
+    " window should be moved down one line to prevent obscuring current item.
+    if 1
+        let v:errors = []
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \ #{name: '1', doc: [repeat('-', winwidth(0))]},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.build()
+                    \.showAtCursor()
+        "call s:VMenuManager.startListening()
+        call assert_equal(s:VMenuManager.__focusedWindow.parentVmenuWindow.y+1, s:VMenuManager.__focusedWindow.y)
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
     endif
 
     call s:showErrors()
