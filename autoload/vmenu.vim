@@ -1033,12 +1033,11 @@ function! s:TopMenuWindow.getClickedItemIndex(mousePos)
 endfunction
 
 "-------------------------------------------------------------------------------
-" class DocWindow implements dumpText, getFocusedItemTips
+" class DocWindow implements dumpText
 "-------------------------------------------------------------------------------
 let s:DocWindow = {}
 function! s:DocWindow.new(textList, parentVmenuWindow)
     let docWindow = deepcopy(s:DocWindow, 1)
-    let docWindow.getFocusedItemTips = function("s:getFocusedItemTips")
     let docWindow.isOpen = 0
     let docWindow.textList = a:textList
     let docWindow.parentVmenuWindow = a:parentVmenuWindow
@@ -1599,7 +1598,7 @@ function! vmenu#installContextMenu(userDefinedItems)
 endfunction
 
 function! vmenu#itemTips()
-    if (s:VMenuManager.__focusedWindow.isOpen == 1)
+    if (s:VMenuManager.__focusedWindow.isOpen == 1 && has_key(s:VMenuManager.__focusedWindow, 'getFocusedItemTips'))
         return s:VMenuManager.__focusedWindow.getFocusedItemTips()
     else
         return ''
