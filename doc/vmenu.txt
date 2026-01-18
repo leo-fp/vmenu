@@ -37,6 +37,8 @@ Version:	0.3.0
     6.2 g:vmenu_enable_echo_tips.......................|vmenu_enable_echo_tips|
     6.3 g:vmenu_enable_mouse_hover...................|vmenu_enable_mouse_hover|
     6.4 g:vmenu_min_context_menu_width...........|vmenu_min_context_menu_width|
+    6.5 g:vmenu_doc_window_scroll_down_key...|vmenu_doc_window_scroll_down_key|
+    6.6 g:vmenu_doc_window_scroll_up_key.......|vmenu_doc_window_scroll_up_key|
 7. vmenu Changelog............................................|vmenu-changelog|
 
 ==============================================================================
@@ -323,7 +325,10 @@ Example:
 The document text you want to show when focusing the item.
 This is somewhat similar to "tip" field, but the text is displayed in a
 child window.
-Currently, the doc window is not interactive. New features are coming soon.
+You can scroll down and up in the doc window by pressing ctrl+e
+and ctrl+y, respectively.
+If you want to bind other key to do that, using "g:vmenu_doc_window_scroll_down_key"
+and "g:vmenu_doc_window_scroll_up_key".
 
 Example:
 >
@@ -377,6 +382,19 @@ Disabled by default. If you want to enable it.
 ----------------------------------------
 Mininal cotext menu width.
 Effective for both context menu and dropdown menu of top menu.
+
+6.5 vmenu_doc_window_scroll_down_key          *vmenu_doc_window_scroll_down_key*
+----------------------------------------
+Set up a key to scroll down in the document window.
+>
+    let g:vmenu_doc_window_scroll_down_key = "j"
+
+
+6.6 vmenu_doc_window_scroll_up_key              *vmenu_doc_window_scroll_up_key*
+----------------------------------------
+Set up a key to scroll down in the document window.
+>
+    let g:vmenu_doc_window_scroll_up_key = "k"
 
 
 ==============================================================================

@@ -37,6 +37,8 @@ let s:enable_log = get(g:, "vmenu_enable_log", 0)
 let s:enable_echo_tips = get(g:, "vmenu_enable_echo_tips", 1)
 let s:enable_mouse_hover = get(g:, "vmenu_enable_mouse_hover", 0)
 let s:min_context_menu_width = get(g:, "vmenu_min_context_menu_width", 0)
+let s:doc_window_scroll_down_key = get(g:, "vmenu_doc_window_scroll_down_key", "\<C-E>")
+let s:doc_window_scroll_up_key = get(g:, "vmenu_doc_window_scroll_up_key", "\<C-Y>")
 
 "-------------------------------------------------------------------------------
 " class HotKey
@@ -126,6 +128,7 @@ hi! VmenuHotkey1 gui=underline guifg=#BEC0C6
 hi! VmenuSelectedHotkey gui=underline guibg=#2E436E guifg=#BEC0C6
 hi! VmenuInactiveHotKey gui=underline guifg=#4D5360
 hi! VmenuScrollbar guibg=#4D4D4F
+hi! VmenuDocWindowScrollbar guibg=#67676A
 hi! VmenuDocWindow guifg=#BEC0C6 guibg=#565656
 
 "-------------------------------------------------------------------------------
@@ -676,7 +679,7 @@ function! s:ContextWindow.__renderText(start, end)
     return reduce(self.contextItemList[a:start:a:end], { acc, val -> add(acc, val.name) }, [])
 endfunction
 
-" offset: the offset of focused item. If offset is -1, no focused item will be rendere
+" offset: the offset of focused item. If offset is -1, no focused item will be rendered
 function! s:ContextWindow.__renderHighlight(offset)
     let win = self.quickuiWindow
 
@@ -773,7 +776,8 @@ function! s:ContextWindow.__openDocWindowIfAvaliable()
     endif
 
     if !empty(self.getCurItem().doc) && empty(self.getCurItem().subItemList)
-        let docWindow = s:DocWindow.new(self.getCurItem().doc, self)
+        let maxDocHeight = float2nr(self.__editorStatusSupplier().lines * 0.8)
+        let docWindow = s:DocWindow.new(self.getCurItem().doc, self, maxDocHeight)
         let [x, y] = self.__calcExpandPos(docWindow.winWidth)
         call docWindow.showAt(x, y)
         let self.docWindow = docWindow
@@ -1033,25 +1037,41 @@ function! s:TopMenuWindow.getClickedItemIndex(mousePos)
 endfunction
 
 "-------------------------------------------------------------------------------
-" class DocWindow implements dumpText
+" class DocWindow implements dumpContent
 "-------------------------------------------------------------------------------
 let s:DocWindow = {}
-function! s:DocWindow.new(textList, parentVmenuWindow)
+function! s:DocWindow.new(textList, parentVmenuWindow, maxHeight)
     let docWindow = deepcopy(s:DocWindow, 1)
     let docWindow.isOpen = 0
     let docWindow.textList = a:textList
+    let docWindow.highlight = []
+    let docWindow.__startIdx = 0
     let docWindow.parentVmenuWindow = a:parentVmenuWindow
-    let docWindow.__actionMap = {}
     let docWindow.winId = rand(srand())
+
+    let actionMap = {}
+    let scrollDownKey = s:doc_window_scroll_down_key
+    let scrollUpKey = s:doc_window_scroll_up_key
+    let actionMap[scrollDownKey]      = { event -> function(docWindow.scrollDown, [], docWindow) }
+    let actionMap[scrollUpKey]        = { event -> function(docWindow.scrollUp, [], docWindow) }
+    let docWindow.__actionMap = actionMap
 
     " visible window width. max width in text list
     let docWindow.winWidth = reduce(a:textList, { acc, val -> max([acc, strwidth(val)]) }, 0)
+    let docWindow.maxTextLen = docWindow.winWidth
 
     " visible window height
-    let docWindow.winHeight = len(a:textList)
+    let docWindow.winHeight = min([len(a:textList), a:maxHeight])
     return docWindow
 endfunction
 function! s:DocWindow.showAt(x, y)
+    let win = quickui#window#new()
+    let renderContent = self.__calcRenderContent(self.__startIdx, self.__startIdx+self.winHeight-1)
+    let displayedTextList = renderContent.textList
+    if len(self.textList) > self.winHeight
+        let self.winWidth = self.winWidth + 1   " plus one for scrollbar
+    endif
+
     let opts = {}
     let opts.w = self.winWidth
     let opts.h = self.winHeight
@@ -1060,27 +1080,91 @@ function! s:DocWindow.showAt(x, y)
     let opts.y = a:y
     let opts.color = "VmenuDocWindow"
 
-    let win = quickui#window#new()
-    call win.open(self.textList, opts)
+    call win.open(displayedTextList, opts)
 
-    let self._window = win
+    let self.__window = win
     let self.isOpen = 1
     let self.x = win.x " column number
     let self.y = win.y " line number
 
-    call self._window.show(1)
+    call self.__window.show(1)
+
+    call self.__window.syntax_begin(1)
+    for syntax in renderContent.highlight
+        call self.__window.syntax_region(syntax.highlight, syntax.x1, syntax.y1, syntax.x2, syntax.y2)
+    endfor
+    call self.__window.syntax_end()
 
     call s:VMenuManager.setFocusedWindow(self)
     redraw
 endfunction
 function! s:DocWindow.handleEvent(inputEvent)
-    call self.parentVmenuWindow.handleEvent(a:inputEvent)
+    if has_key(self.__actionMap, a:inputEvent.key)
+        call get(self.__actionMap, a:inputEvent.key, { -> { -> ''}})(a:inputEvent)()
+    else
+        call self.parentVmenuWindow.handleEvent(a:inputEvent)
+    endif
 endfunction
 function! s:DocWindow.dumpText()
-    return self._window.text
+    return self.__window.text
+endfunction
+function! s:DocWindow.dumpContent()
+    return #{textList: self.__window.text, highlight: self.highlight}
+endfunction
+function! s:DocWindow.scrollDown()
+    " reach the bottom. do nothing
+    if self.__startIdx + self.winHeight >= len(self.textList)
+        return
+    endif
+
+    let self.__startIdx = self.__startIdx + 1
+    let renderContent = self.__calcRenderContent(self.__startIdx, self.__startIdx+self.winHeight-1)
+    call self.__render(renderContent)
+endfunction
+function! s:DocWindow.scrollUp()
+    " reach the top. do nothing
+    if self.__startIdx == 0
+        return
+    endif
+
+    let self.__startIdx = self.__startIdx - 1
+    let renderContent = self.__calcRenderContent(self.__startIdx, self.__startIdx+self.winHeight-1)
+    call self.__render(renderContent)
+endfunction
+function! s:DocWindow.__render(content)
+    call self.__window.set_text(a:content.textList)
+
+    call self.__window.syntax_begin(1)
+    for syntax in a:content.highlight
+        call self.__window.syntax_region(syntax.highlight, syntax.x1, syntax.y1, syntax.x2, syntax.y2)
+    endfor
+    call self.__window.syntax_end()
+    redraw
+endfunction
+" endIdx is inclusive
+function! s:DocWindow.__calcRenderContent(startIdx, endIdx)
+    let displayedTextList = self.textList[a:startIdx:a:endIdx]
+    let highlight = []
+    let scrollbarWidth = 0
+
+    if self.textList->len() > self.winHeight    " need to add scrollbar
+        let scrollbarHeight = 2
+        let scrollbarOffset = (self.winHeight - scrollbarHeight) * a:startIdx / (self.textList->len() - self.winHeight)
+        let scrollbarStartIdx = a:startIdx + scrollbarOffset
+        for idx in range(a:startIdx, a:endIdx)
+            if scrollbarStartIdx <= idx && idx < scrollbarStartIdx + scrollbarHeight
+                call add(highlight, #{highlight: "VmenuDocWindowScrollbar", x1: self.maxTextLen, y1: idx-a:startIdx, x2: self.maxTextLen+1, y2: idx-a:startIdx})
+            endif
+        endfor
+        let scrollbarWidth = 1
+    endif
+    call map(displayedTextList, { idx, val -> val .. repeat(' ', self.maxTextLen + scrollbarWidth - strwidth(val)) })
+    let self.highlight = highlight
+
+    return #{textList: displayedTextList, highlight:highlight}
 endfunction
 function! s:DocWindow.close()
-    call self._window.close()
+    call self.__window.close()
     let self.isOpen = 0
 endfunction
 
@@ -1094,6 +1178,7 @@ function! s:getEditorStatus(curMode="n")
     let editorStatus.currentFileType = &ft
     " get selected text will move the cursor to the last visual area, so only get selected text in visual mode.
     let editorStatus.selectedText = a:curMode[0:1] ==? "v" ? s:getSelectedText() : ""
+    let editorStatus.lines = &lines   " Number of lines of the Vim window.
     return editorStatus
 endfunction
 
@@ -1673,8 +1758,14 @@ let s:errorList = []
 " interface
 "-------------------------------------------------------------------------------
 " get the text list in the window
+" TODO: deprecate this and use dumpContent instead
 function! s:dumpText() dict
     return ""
+endfunction
+
+" get the text list and highlight in the window
+function! s:dumpContent() dict
+    return #{textList: [], highlight: []}   "
 endfunction
 
 function! s:getFocusedItemTips() dict
@@ -1717,6 +1808,8 @@ if 0
     let v:errors = []
     let s:enable_log = 0
     let s:min_context_menu_width = 0
+    let s:doc_window_scroll_down_key = "\<C-E>"
+    let s:doc_window_scroll_up_key = "\<C-Y>"
 
     " vmenu item parse test
     if 0
@@ -3215,7 +3308,6 @@ if 0
 
     " doc window test
     if 1
-        let v:errors = []
         call s:ContextWindow.builder()
                     \.contextItemList(s:VMenuManager.parseContextItem([
                     \ #{name: '1', cmd: ' ', doc: ["hello", "vmenu"]},
@@ -3227,7 +3319,7 @@ if 0
         let docWindow1 = s:VMenuManager.__focusedWindow
         call assert_equal(["hello", "vmenu"], docWindow1.dumpText())
         call docWindow1.handleEvent(s:KeyStrokeEvent.new("j"))
-        call assert_equal(["hello", "vmenu2"], s:VMenuManager.__focusedWindow.dumpText())
+        call assert_equal(["hello ", "vmenu2"], s:VMenuManager.__focusedWindow.dumpText())
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
         call assert_equal(0, s:VMenuManager.__focusedWindow.isOpen)
         call assert_equal(0, s:VMenuManager.__focusedWindow.parentVmenuWindow.isOpen)
@@ -3236,7 +3328,6 @@ if 0
 
     " if both the doc and subItemList are present, doc window should not be displayed
     if 1
-        let v:errors = []
         call s:ContextWindow.builder()
                     \.contextItemList(s:VMenuManager.parseContextItem([
                     \ #{name: '1', doc: ["hello", "vmenu"], subItemList: [#{name: '1.1', cmd: ''}]},
@@ -3251,7 +3342,6 @@ if 0
 
     " test chinese text width in doc and context menu
     if 1
-        let v:errors = []
         call s:ContextWindow.builder()
                     \.contextItemList(s:VMenuManager.parseContextItem([
                     \ #{name: '1', doc: ["一二三", "四五六"]},
@@ -3270,15 +3360,85 @@ if 0
     " if the space on both left and right sides can not hold the doc window, the doc
     " window should be moved down one line to prevent obscuring current item.
     if 1
-        let v:errors = []
+        call vmenu#cleanTopMenu()
+        call s:VMenuManager.initTopMenuItems('1', vmenu#parse_context([
+                    \ #{name: '1', doc: [repeat('-', &columns)]},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+        call s:TopMenuWindow.builder()
+                    \.topMenuItemList(s:VMenuManager.__allTopMenuItemList)
+                    \.build()
+                    \.show()
+        "call s:VMenuManager.startListening()
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<CR>"))
+        call assert_equal(s:VMenuManager.__focusedWindow.parentVmenuWindow.y+1, s:VMenuManager.__focusedWindow.y)
+        call assert_equal(1, s:VMenuManager.__focusedWindow.winHeight)
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+    endif
+
+    " display partial text if text list exceeds max doc window height
+    if 1
         call s:ContextWindow.builder()
                     \.contextItemList(s:VMenuManager.parseContextItem([
-                    \ #{name: '1', doc: [repeat('-', winwidth(0))]},
+                    \ #{name: '1', doc: range(4) + ["abc"]},
+                    \ #{name: '2', cmd: ''},
+                    \ #{name: '3', cmd: ''},
+                    \ #{name: '4', cmd: ''},
                     \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.editorStatusSupplier({ -> #{lines: 4 } })
                     \.build()
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
-        call assert_equal(s:VMenuManager.__focusedWindow.parentVmenuWindow.y+1, s:VMenuManager.__focusedWindow.y)
+        call assert_equal(["0   ", "1   ", "2   "], s:VMenuManager.__focusedWindow.dumpText())
+        call assert_equal(4, s:VMenuManager.__focusedWindow.winWidth)
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+    endif
+
+    " test scrolling down and scroll up in doc window
+    if 1
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \ #{name: '1', doc: range(4)},
+                    \ #{name: '2', cmd: ''},
+                    \ #{name: '3', cmd: ''},
+                    \ #{name: '4', cmd: ''},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.editorStatusSupplier({ -> #{lines: 4 } })
+                    \.build()
+                    \.showAtCursor()
+        "call s:VMenuManager.startListening()
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<C-E>"))
+        call assert_equal(["1 ", "2 ", "3 "], s:VMenuManager.__focusedWindow.dumpText())
+        " reach the bottom. keep as is
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<C-E>"))
+        call assert_equal(["1 ", "2 ", "3 "], s:VMenuManager.__focusedWindow.dumpText())
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<C-Y>"))
+        call assert_equal(["0 ", "1 ", "2 "], s:VMenuManager.__focusedWindow.dumpText())
+        " reach the top. keep as is
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<C-Y>"))
+        call assert_equal(["0 ", "1 ", "2 "], s:VMenuManager.__focusedWindow.dumpText())
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+    endif
+
+    " test scrollbar in doc window
+    if 1
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \ #{name: '1', doc: range(4)},
+                    \ #{name: '2', cmd: ''},
+                    \ #{name: '3', cmd: ''},
+                    \ #{name: '4', cmd: ''},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.editorStatusSupplier({ -> #{lines: 4 } })
+                    \.build()
+                    \.showAtCursor()
+        "call s:VMenuManager.startListening()
+        call assert_equal(["0 ", "1 ", "2 "], s:VMenuManager.__focusedWindow.dumpContent().textList)
+        echom s:VMenuManager.__focusedWindow.dumpContent().highlight
+        call assert_equal([
+                    \#{highlight: "VmenuDocWindowScrollbar", x1: 1, y1: 0, x2: 2, y2: 0},
+                    \#{highlight: "VmenuDocWindowScrollbar", x1: 1, y1: 1, x2: 2, y2: 1}],
+                    \s:VMenuManager.__focusedWindow.dumpContent().highlight)
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
     endif
 
