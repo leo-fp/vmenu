@@ -3434,7 +3434,6 @@ if 0
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
         call assert_equal(["0 ", "1 ", "2 "], s:VMenuManager.__focusedWindow.dumpContent().textList)
-        echom s:VMenuManager.__focusedWindow.dumpContent().highlight
         call assert_equal([
                     \#{highlight: "VmenuDocWindowScrollbar", x1: 1, y1: 0, x2: 2, y2: 0},
                     \#{highlight: "VmenuDocWindowScrollbar", x1: 1, y1: 1, x2: 2, y2: 1}],
