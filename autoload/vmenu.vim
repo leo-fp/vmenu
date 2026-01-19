@@ -196,12 +196,12 @@ function! s:VmenuWindowBuilder.build()
 endfunction
 
 "-------------------------------------------------------------------------------
-" class VmenuWindow implements dumpText. base class
+" class VmenuWindow implements dumpContent. base class
 "-------------------------------------------------------------------------------
 let s:VmenuWindow = {}
 function! s:VmenuWindow.new()
     let vmenuWindow = deepcopy(s:VmenuWindow, 1)
-    let vmenuWindow.dumpText = function("s:dumpText")
+    let vmenuWindow.dumpContent = function("s:dumpContent")
     let vmenuWindow.hotKeyList = []
     let vmenuWindow.isOpen = 0
     let vmenuWindow.x = -1 " column number
@@ -772,7 +772,7 @@ endfunction
 function! s:ContextWindow.__openDocWindowIfAvaliable()
     " close old doc window
     if !empty(self.docWindow) && self.docWindow.isOpen == 1
-        call self.docWindow.close()
+        call self.docWindow.handleEvent(#{key: "VMENU_CLOSE_DOC_WINDOW"})
     endif
 
     if !empty(self.getCurItem().doc) && empty(self.getCurItem().subItemList)
@@ -1054,6 +1054,7 @@ function! s:DocWindow.new(textList, parentVmenuWindow, maxHeight)
     let scrollUpKey = s:doc_window_scroll_up_key
     let actionMap[scrollDownKey]      = { event -> function(docWindow.scrollDown, [], docWindow) }
     let actionMap[scrollUpKey]        = { event -> function(docWindow.scrollUp, [], docWindow) }
+    let actionMap["VMENU_CLOSE_DOC_WINDOW"]        = { event -> function(docWindow.close, [], docWindow) }
     let docWindow.__actionMap = actionMap
 
     " visible window width. max width in text list
@@ -1105,8 +1106,8 @@ function! s:DocWindow.handleEvent(inputEvent)
         call self.parentVmenuWindow.handleEvent(a:inputEvent)
     endif
 endfunction
-function! s:DocWindow.dumpText()
-    return self.__window.text
+function! s:DocWindow.dumpContent()
+    return #{textList: self.__window.text, highlight: []}
 endfunction
 function! s:DocWindow.dumpContent()
     return #{textList: self.__window.text, highlight: self.highlight}
@@ -1757,12 +1758,6 @@ let s:errorList = []
 "-------------------------------------------------------------------------------
 " interface
 "-------------------------------------------------------------------------------
-" get the text list in the window
-" TODO: deprecate this and use dumpContent instead
-function! s:dumpText() dict
-    return ""
-endfunction
-
 " get the text list and highlight in the window
 function! s:dumpContent() dict
     return #{textList: [], highlight: []}   "
@@ -3317,9 +3312,9 @@ if 0
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
         let docWindow1 = s:VMenuManager.__focusedWindow
-        call assert_equal(["hello", "vmenu"], docWindow1.dumpText())
+        call assert_equal(["hello", "vmenu"], docWindow1.dumpContent().textList)
         call docWindow1.handleEvent(s:KeyStrokeEvent.new("j"))
-        call assert_equal(["hello ", "vmenu2"], s:VMenuManager.__focusedWindow.dumpText())
+        call assert_equal(["hello ", "vmenu2"], s:VMenuManager.__focusedWindow.dumpContent().textList)
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
         call assert_equal(0, s:VMenuManager.__focusedWindow.isOpen)
         call assert_equal(0, s:VMenuManager.__focusedWindow.parentVmenuWindow.isOpen)
@@ -3389,7 +3384,7 @@ if 0
                     \.build()
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
-        call assert_equal(["0   ", "1   ", "2   "], s:VMenuManager.__focusedWindow.dumpText())
+        call assert_equal(["0   ", "1   ", "2   "], s:VMenuManager.__focusedWindow.dumpContent().textList)
         call assert_equal(4, s:VMenuManager.__focusedWindow.winWidth)
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
     endif
@@ -3408,15 +3403,15 @@ if 0
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<C-E>"))
-        call assert_equal(["1 ", "2 ", "3 "], s:VMenuManager.__focusedWindow.dumpText())
+        call assert_equal(["1 ", "2 ", "3 "], s:VMenuManager.__focusedWindow.dumpContent().textList)
         " reach the bottom. keep as is
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<C-E>"))
-        call assert_equal(["1 ", "2 ", "3 "], s:VMenuManager.__focusedWindow.dumpText())
+        call assert_equal(["1 ", "2 ", "3 "], s:VMenuManager.__focusedWindow.dumpContent().textList)
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<C-Y>"))
-        call assert_equal(["0 ", "1 ", "2 "], s:VMenuManager.__focusedWindow.dumpText())
+        call assert_equal(["0 ", "1 ", "2 "], s:VMenuManager.__focusedWindow.dumpContent().textList)
         " reach the top. keep as is
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<C-Y>"))
-        call assert_equal(["0 ", "1 ", "2 "], s:VMenuManager.__focusedWindow.dumpText())
+        call assert_equal(["0 ", "1 ", "2 "], s:VMenuManager.__focusedWindow.dumpContent().textList)
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
     endif
 
