@@ -196,11 +196,12 @@ function! s:VmenuWindowBuilder.build()
 endfunction
 
 "-------------------------------------------------------------------------------
-" class VmenuWindow implements dumpContent. base class
+" class VmenuWindow extends EventHandler implements dumpContent. base class
 "-------------------------------------------------------------------------------
 let s:VmenuWindow = {}
 function! s:VmenuWindow.new()
-    let vmenuWindow = deepcopy(s:VmenuWindow, 1)
+    let vmenuWindow = s:EventHandler.new()
+    call extend(vmenuWindow, deepcopy(s:VmenuWindow, 1), "force")
     let vmenuWindow.dumpContent = function("s:dumpContent")
     let vmenuWindow.hotKeyList = []
     let vmenuWindow.isOpen = 0
@@ -212,9 +213,7 @@ function! s:VmenuWindow.new()
     let vmenuWindow.__goNextKey = 'h'
     let vmenuWindow.__closeKey            = "\<ESC>" " key to close vmenu window
     let vmenuWindow.__confirmKey          = "\<CR>" " key to enter item
-    let vmenuWindow.__delayTime = 0
     let vmenuWindow.__goBottomKey = ''
-    let vmenuWindow.__actionMap = {}
     let vmenuWindow.__errConsumer = function("s:printWarn")
     let vmenuWindow.__curItemIndex = -1
     let vmenuWindow.__componentLength = 0
@@ -366,11 +365,26 @@ endfunction
 function! s:VmenuWindow.__expand()
 endfunction
 
-function! s:VmenuWindow.handleEvent(inputEvent)
+"-------------------------------------------------------------------------------
+" class EventHandler
+"-------------------------------------------------------------------------------
+let s:EventHandler = {}
+function! s:EventHandler.new()
+    let eventHandler = deepcopy(s:EventHandler, 1)
+    let eventHandler.__delayTime = 0
+    let eventHandler.__actionMap = {}
+    let eventHandler.winId = -1 " vmenu window id
+    return eventHandler
+endfunction
+function! s:EventHandler.handleEvent(inputEvent)
     if self.__delayTime != 0
         execute self.__delayTime .. 'sleep'
     endif
 
+    call s:log(printf("winId: %s, event detected: %s", self.winId, s:event2String(a:inputEvent)))
+    call self.dispatch(a:inputEvent)
+endfunction
+function! s:EventHandler.dispatch(inputEvent)
     call get(self.__actionMap, a:inputEvent.key, { -> { -> ''}})(a:inputEvent)()
 endfunction
 
@@ -1037,11 +1051,12 @@ function! s:TopMenuWindow.getClickedItemIndex(mousePos)
 endfunction
 
 "-------------------------------------------------------------------------------
-" class DocWindow implements dumpContent
+" class DocWindow extends EventHandler implements dumpContent
 "-------------------------------------------------------------------------------
 let s:DocWindow = {}
 function! s:DocWindow.new(textList, parentVmenuWindow, maxHeight)
-    let docWindow = deepcopy(s:DocWindow, 1)
+    let docWindow = s:EventHandler.new()
+    call extend(docWindow, deepcopy(s:DocWindow, 1), "force")
     let docWindow.isOpen = 0
     let docWindow.textList = a:textList
     let docWindow.highlight = []
@@ -1099,7 +1114,7 @@ function! s:DocWindow.showAt(x, y)
     call s:VMenuManager.setFocusedWindow(self)
     redraw
 endfunction
-function! s:DocWindow.handleEvent(inputEvent)
+function! s:DocWindow.dispatch(inputEvent)
     if has_key(self.__actionMap, a:inputEvent.key)
         call get(self.__actionMap, a:inputEvent.key, { -> { -> ''}})(a:inputEvent)()
     else
@@ -1743,6 +1758,12 @@ function! s:executeCmd(Cmd, item, editorStatus)
     if type(a:Cmd) == v:t_func
         call a:Cmd(s:createCallbackItemParm(a:item), a:editorStatus)
     endif
+endfunction
+
+function! s:event2String(event)
+    let workingEvent = deepcopy(a:event, 1)
+    let workingEvent.key = keytrans(workingEvent.key)   " convert to a readable format
+    return string(workingEvent)
 endfunction
 
 " only used in testing
