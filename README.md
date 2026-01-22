@@ -43,6 +43,7 @@ just have some ideas want to try, start over seems easier and tempting
 ### 0.4.0 NEXT
 - [ ] an always opening top menu
 - [x] fuzzy picker suport
+- [x] new vmenu item "doc"
 
 ## NOTE
 * This plugin may changes radically, use with caution
