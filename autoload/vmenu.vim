@@ -267,7 +267,7 @@ function! s:VmenuWindow.executeByHotKey(char)
 endfunction
 function! s:VmenuWindow.executeByLeftMouse(mouseClickEvent)
     " calculate index of clicked item
-    let clickedIdx = self.getClickedItemIndex(a:mouseClickEvent.mousepos)
+    let clickedIdx = self.getItemIndexOnPos(a:mouseClickEvent.mousepos)
     call s:log(self.winId .. " will focus at: " .. clickedIdx)
 
     if clickedIdx == -1
@@ -328,11 +328,25 @@ function! s:VmenuWindow.__onSubMenuClose(closeCode, event)
 endfunction
 
 " return: item index in context item list. if there is no valid item, return -1
-function! s:VmenuWindow.getClickedItemIndex(mousePos)
+function! s:VmenuWindow.getItemIndexOnPos(mousePos)
 endfunction
 
 function! s:VmenuWindow.__onMouseHover(event)
-    let itemIdxAtMousePos = self.getClickedItemIndex(a:event.mousepos)
+    let itemIdxAtMousePos = self.getItemIndexOnPos(a:event.mousepos)
+
+    if !self.canBeFocused(itemIdxAtMousePos)
+        call self.__renderHighlight(-1)
+        call s:VMenuManager.setFocusedWindow(self)
+
+        if !empty(self.docWindow) && self.docWindow.isOpen == 1
+            call self.docWindow.handleEvent(#{key: "VMENU_CLOSE_DOC_WINDOW"})
+        endif
+
+        if !empty(self.subVmenuWindow) && itemIdxAtMousePos != self.__curItemIndex
+            call s:log("winId: " .. self.winId .. " hover at " .. itemIdxAtMousePos)
+            call self.subVmenuWindow.handleEvent(s:RecursiveCloseEvent.new())
+        endif
+    endif
 
     " not in current window. pass it to parent window
     if itemIdxAtMousePos == -1 && !empty(self.parentVmenuWindow)
@@ -344,7 +358,7 @@ function! s:VmenuWindow.__onMouseHover(event)
     endif
 
     " only execute once at same item
-    if itemIdxAtMousePos == self.__curItemIndex && !empty(self.subVmenuWindow,) && get(self.subVmenuWindow, "isOpen", 0) == 1
+    if itemIdxAtMousePos == self.__curItemIndex && !empty(self.subVmenuWindow) && get(self.subVmenuWindow, "isOpen", 0) == 1
         return
     endif
 
@@ -558,7 +572,7 @@ function! s:ContextWindow.showAtCursor()
     return self
 endfunction
 
-function! s:ContextWindow.getClickedItemIndex(mousePos)
+function! s:ContextWindow.getItemIndexOnPos(mousePos)
     let clickedPos = #{x: a:mousePos.screencol, y: a:mousePos.screenrow}
     let topLeftCorner = s:VMenuManager.calcTopLeftPos(self)
     call s:log("clickedPos:" .. string(clickedPos))
@@ -618,6 +632,8 @@ endfunction
 function! s:ContextWindow.focusBottom()
     call self.__focusFirstMatch(reverse(range(self.__componentLength)))
 endfunction
+" idx: the index in the item list.
+" note: the item at the index must be exist
 function! s:ContextWindow.canBeFocused(idx)
     return self.contextItemList[a:idx].isSep == 0 && self.contextItemList[a:idx].isInactive(self.__editorStatusSupplier()) == 0
 endfunction
@@ -753,7 +769,9 @@ function! s:ContextWindow.__renderHighlight(offset)
         endif
 
         " hot key
-        call add(curItem.syntaxRegionList, ["VmenuHotkey1", curItem.hotKeyPos, curItem.hotKeyPos + 1])
+        if curItem.hotKeyPos != -1
+            call add(curItem.syntaxRegionList, ["VmenuHotkey1", curItem.hotKeyPos, curItem.hotKeyPos + 1])
+        endif
 
         " seperator line
         if curItem.isSep == 1
@@ -781,6 +799,7 @@ function! s:ContextWindow.__renderHighlight(offset)
     endfor
 
     call win.syntax_end()
+    redraw
 endfunction
 
 function! s:ContextWindow.__openDocWindowIfAvaliable()
@@ -1025,7 +1044,7 @@ function! s:TopMenuWindow.__renderHighlight(offset)
     call win.syntax_end()
 endfunction
 
-function! s:TopMenuWindow.getClickedItemIndex(mousePos)
+function! s:TopMenuWindow.getItemIndexOnPos(mousePos)
     let clickedPos = #{x: a:mousePos.screencol, y: a:mousePos.screenrow}
     let topLeftCorner = s:VMenuManager.calcTopLeftPos(self)
     call s:log("clickedPos:" .. string(clickedPos))
@@ -2188,7 +2207,7 @@ if 0
                     \.showAtCursor()
         let item = s:VMenuManager.__focusedWindow.contextItemList[1]
         call assert_equal("2", item.name[item.descPos:item.descPos+item.descWidth-1])
-        call assert_equal(['VmenuDesc', 8, 9], item.syntaxRegionList[1])
+        call assert_equal(['VmenuDesc', 8, 9], item.syntaxRegionList[0])
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
     endif
 
@@ -3454,6 +3473,32 @@ if 0
                     \#{highlight: "VmenuDocWindowScrollbar", x1: 1, y1: 0, x2: 2, y2: 0},
                     \#{highlight: "VmenuDocWindowScrollbar", x1: 1, y1: 1, x2: 2, y2: 1}],
                     \s:VMenuManager.__focusedWindow.dumpContent().highlight)
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+    endif
+
+    " when hovering an inactive item
+    " cancel the highlight of focused item
+    " close doc window
+    " close child menu
+    if 1
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \ #{name: '1', cmd: '', doc: ["hello"]},
+                    \ #{name: '2', cmd: '', subItemList: [#{name: "2.1", cmd: ''}]},
+                    \ #{name: '3', cmd: '', deactive-if: { -> 1 }},
+                    \ #{name: '4', cmd: ''},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.build()
+                    \.showAtCursor()
+        "call s:VMenuManager.startListening()
+        let mainWindow = s:VMenuManager.__focusedWindow.parentVmenuWindow
+        call assert_equal(['VmenuSelect', 0, 6], mainWindow.getCurItem().syntaxRegionList[0])
+        call s:VMenuManager.__focusedWindow.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(mainWindow, 0, 2)))
+        call assert_equal([], s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList)
+        call assert_equal(0, s:VMenuManager.__focusedWindow.docWindow.isOpen)
+        call s:VMenuManager.__focusedWindow.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(mainWindow, 0, 1)))
+        call s:VMenuManager.__focusedWindow.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(mainWindow, 0, 2)))
+        call assert_equal(0, s:VMenuManager.__focusedWindow.subVmenuWindow.isOpen)
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
     endif
 
