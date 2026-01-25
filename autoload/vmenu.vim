@@ -39,6 +39,7 @@ let s:enable_mouse_hover = get(g:, "vmenu_enable_mouse_hover", 0)
 let s:min_context_menu_width = get(g:, "vmenu_min_context_menu_width", 0)
 let s:doc_window_scroll_down_key = get(g:, "vmenu_doc_window_scroll_down_key", "\<C-E>")
 let s:doc_window_scroll_up_key = get(g:, "vmenu_doc_window_scroll_up_key", "\<C-Y>")
+let s:enable_markdown_syntax_in_doc_window = get(g:, "vmenu_enable_markdown_syntax_in_doc_window", 0)
 
 "-------------------------------------------------------------------------------
 " class HotKey
@@ -1114,6 +1115,9 @@ function! s:DocWindow.showAt(x, y)
     let opts.x = a:x
     let opts.y = a:y
     let opts.color = "VmenuDocWindow"
+    if s:enable_markdown_syntax_in_doc_window == 1
+        let opts.syntax = "markdown"
+    endif
 
     call win.open(displayedTextList, opts)
 

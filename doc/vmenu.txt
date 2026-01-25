@@ -39,6 +39,7 @@ Version:	0.3.0
     6.4 g:vmenu_min_context_menu_width...........|vmenu_min_context_menu_width|
     6.5 g:vmenu_doc_window_scroll_down_key...|vmenu_doc_window_scroll_down_key|
     6.6 g:vmenu_doc_window_scroll_up_key.......|vmenu_doc_window_scroll_up_key|
+    6.7 g:vmenu_enable_markdown_syntax_in_doc_window..|vmenu_enable_markdown_syntax_in_doc_window|
 7. vmenu Changelog............................................|vmenu-changelog|
 
 ==============================================================================
@@ -341,6 +342,43 @@ Example:
     \"Excepteur sint occaecat cupidatat non proident",
     \"sunt in culpa qui officia deserunt mollit anim id est laborum" ]},
 
+If "g:vmenu_enable_markdown_syntax_in_doc_window" is enabled.
+NOTE: not all markup are effective, but it's enough for me.
+>
+    \#{name: 'markdown doc', doc: [
+    \"# H1",
+    \"## H2",
+    \"### H3",
+    \"**bold text**",
+    \"*italicized text*",
+    \"> blockquote",
+    \"1. First item",
+    \"2. Second item",
+    \"3. Third item",
+    \"- First item",
+    \"- Second item",
+    \"- Third item",
+    \"`code`",
+    \"---",
+    \"（Link）	[title](https://www.example.com)",
+    \"",
+    \"| Syntax      | Description |",
+    \"| ----------- | ----------- |",
+    \"| Header      | Title       |",
+    \"| Paragraph   | Text        |",
+    \"```",
+    \"{",
+    \"  \"firstName\": \"John\",",
+    \"  \"lastName\": \"Smith\",",
+    \"}",
+    \"```",
+    \"（Footnote）	Here's a sentence with a footnote. [^1]",
+    \"~~The world is flat.~~",
+    \"- [x] Write the press release",
+    \"- [ ] Update the website",
+    \"- [ ] Contact the media"
+    \]},
+
 
 ==============================================================================
 5. vmenu Tips and Tricks						         *vmenu-tips-and-tricks*
@@ -395,6 +433,13 @@ Set up a key to scroll down in the document window.
 Set up a key to scroll down in the document window.
 >
     let g:vmenu_doc_window_scroll_up_key = "k"
+
+
+6.7 vmenu_enable_markdown_syntax_in_doc_window   *vmenu_enable_markdown_syntax_in_doc_window*
+----------------------------------------
+Enable markdown syntax in doc window. default is 0.
+>
+    let g:vmenu_enable_markdown_syntax_in_doc_window = 1
 
 
 ==============================================================================
