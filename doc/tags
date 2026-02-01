@@ -15,6 +15,7 @@ vmenu-changelog	vmenu.txt	/*vmenu-changelog*
 vmenu-cmd	vmenu.txt	/*vmenu-cmd*
 vmenu-deactive-if	vmenu.txt	/*vmenu-deactive-if*
 vmenu-deactive-mode	vmenu.txt	/*vmenu-deactive-mode*
+vmenu-doc	vmenu.txt	/*vmenu-doc*
 vmenu-global-variables	vmenu.txt	/*vmenu-global-variables*
 vmenu-group	vmenu.txt	/*vmenu-group*
 vmenu-icon	vmenu.txt	/*vmenu-icon*
@@ -30,5 +31,9 @@ vmenu-tip	vmenu.txt	/*vmenu-tip*
 vmenu-tips-and-tricks	vmenu.txt	/*vmenu-tips-and-tricks*
 vmenu-vmenu_enable_log	vmenu.txt	/*vmenu-vmenu_enable_log*
 vmenu.txt	vmenu.txt	/*vmenu.txt*
+vmenu_doc_window_scroll_down_key	vmenu.txt	/*vmenu_doc_window_scroll_down_key*
+vmenu_doc_window_scroll_up_key	vmenu.txt	/*vmenu_doc_window_scroll_up_key*
 vmenu_enable_echo_tips	vmenu.txt	/*vmenu_enable_echo_tips*
+vmenu_enable_markdown_syntax_in_doc_window	vmenu.txt	/*vmenu_enable_markdown_syntax_in_doc_window*
 vmenu_enable_mouse_hover	vmenu.txt	/*vmenu_enable_mouse_hover*
+vmenu_min_context_menu_width	vmenu.txt	/*vmenu_min_context_menu_width*

@@ -118,6 +118,17 @@ function! s:RecursiveCloseEvent.new()
 endfunction
 
 "-------------------------------------------------------------------------------
+" class ScrollbarUpdateEvent
+"-------------------------------------------------------------------------------
+let s:ScrollbarUpdateEvent = {}
+function! s:ScrollbarUpdateEvent.new(scrolledCnt)
+    let scrollbarUpdateEvent = deepcopy(s:ScrollbarUpdateEvent, 1)
+    let scrollbarUpdateEvent.key = "SCROLLBAR_UPDATE"
+    let scrollbarUpdateEvent.scrolledCnt = a:scrolledCnt
+    return scrollbarUpdateEvent
+endfunction
+
+"-------------------------------------------------------------------------------
 " color
 "-------------------------------------------------------------------------------
 hi! VmenuBg guifg=#BEC0C6 guibg=#2B2D30
@@ -129,7 +140,7 @@ hi! VmenuHotkey1 gui=underline guifg=#BEC0C6
 hi! VmenuSelectedHotkey gui=underline guibg=#2E436E guifg=#BEC0C6
 hi! VmenuInactiveHotKey gui=underline guifg=#4D5360
 hi! VmenuScrollbar guibg=#4D4D4F
-hi! VmenuDocWindowScrollbar guibg=#67676A
+hi! VmenuDocWindowScrollbar guibg=#67676A guifg=#67676A " thumb highlight
 hi! VmenuDocWindow guifg=#BEC0C6 guibg=#565656
 
 "-------------------------------------------------------------------------------
@@ -1083,6 +1094,7 @@ function! s:DocWindow.new(textList, parentVmenuWindow, maxHeight)
     let docWindow.__startIdx = 0
     let docWindow.parentVmenuWindow = a:parentVmenuWindow
     let docWindow.winId = rand(srand())
+    let docWindow.scrollbarWindow = {}
 
     let actionMap = {}
     let scrollDownKey = s:doc_window_scroll_down_key
@@ -1102,8 +1114,8 @@ function! s:DocWindow.new(textList, parentVmenuWindow, maxHeight)
 endfunction
 function! s:DocWindow.showAt(x, y)
     let win = quickui#window#new()
-    let renderContent = self.__calcRenderContent(self.__startIdx, self.__startIdx+self.winHeight-1)
-    let displayedTextList = renderContent.textList
+    let renderContent = self.__calcRenderText(self.__startIdx, self.__startIdx+self.winHeight-1)
+    let displayedTextList = renderContent
     if len(self.textList) > self.winHeight
         let self.winWidth = self.winWidth + 1   " plus one for scrollbar
     endif
@@ -1128,11 +1140,12 @@ function! s:DocWindow.showAt(x, y)
 
     call self.__window.show(1)
 
-    call self.__window.syntax_begin(1)
-    for syntax in renderContent.highlight
-        call self.__window.syntax_region(syntax.highlight, syntax.x1, syntax.y1, syntax.x2, syntax.y2)
-    endfor
-    call self.__window.syntax_end()
+    redraw
+    if self.textList->len() > self.winHeight    " need to add scrollbar
+        let scrollbarWidow = s:ScrollbarWindow.new(self.winHeight, self.textList->len(), 2)
+        call scrollbarWidow.showAt(self.x+self.maxTextLen, self.y)
+        let self.scrollbarWindow = scrollbarWidow
+    endif
 
     call s:VMenuManager.setFocusedWindow(self)
     redraw
@@ -1145,9 +1158,6 @@ function! s:DocWindow.dispatch(inputEvent)
     endif
 endfunction
 function! s:DocWindow.dumpContent()
-    return #{textList: self.__window.text, highlight: []}
-endfunction
-function! s:DocWindow.dumpContent()
     return #{textList: self.__window.text, highlight: self.highlight}
 endfunction
 function! s:DocWindow.scrollDown()
@@ -1157,8 +1167,12 @@ function! s:DocWindow.scrollDown()
     endif
 
     let self.__startIdx = self.__startIdx + 1
-    let renderContent = self.__calcRenderContent(self.__startIdx, self.__startIdx+self.winHeight-1)
-    call self.__render(renderContent)
+    let renderContent = self.__calcRenderText(self.__startIdx, self.__startIdx+self.winHeight-1)
+    call self.__window.set_text(renderContent)
+    redraw
+    if !empty(self.scrollbarWindow) && self.scrollbarWindow.isOpen == 1
+        call self.scrollbarWindow.handleEvent(s:ScrollbarUpdateEvent.new(self.__startIdx))
+    endif
 endfunction
 function! s:DocWindow.scrollUp()
     " reach the top. do nothing
@@ -1167,44 +1181,123 @@ function! s:DocWindow.scrollUp()
     endif
 
     let self.__startIdx = self.__startIdx - 1
-    let renderContent = self.__calcRenderContent(self.__startIdx, self.__startIdx+self.winHeight-1)
-    call self.__render(renderContent)
-endfunction
-function! s:DocWindow.__render(content)
-    call self.__window.set_text(a:content.textList)
+    let renderContent = self.__calcRenderText(self.__startIdx, self.__startIdx+self.winHeight-1)
 
-    call self.__window.syntax_begin(1)
-    for syntax in a:content.highlight
-        call self.__window.syntax_region(syntax.highlight, syntax.x1, syntax.y1, syntax.x2, syntax.y2)
-    endfor
-    call self.__window.syntax_end()
+    call self.__window.set_text(renderContent)
     redraw
+    if !empty(self.scrollbarWindow) && self.scrollbarWindow.isOpen == 1
+        call self.scrollbarWindow.handleEvent(s:ScrollbarUpdateEvent.new(self.__startIdx))
+    endif
 endfunction
 " endIdx is inclusive
-function! s:DocWindow.__calcRenderContent(startIdx, endIdx)
+function! s:DocWindow.__calcRenderText(startIdx, endIdx)
     let displayedTextList = self.textList[a:startIdx:a:endIdx]
     let highlight = []
     let scrollbarWidth = 0
 
     if self.textList->len() > self.winHeight    " need to add scrollbar
-        let scrollbarHeight = 2
-        let scrollbarOffset = (self.winHeight - scrollbarHeight) * a:startIdx / (self.textList->len() - self.winHeight)
-        let scrollbarStartIdx = a:startIdx + scrollbarOffset
-        for idx in range(a:startIdx, a:endIdx)
-            if scrollbarStartIdx <= idx && idx < scrollbarStartIdx + scrollbarHeight
-                call add(highlight, #{highlight: "VmenuDocWindowScrollbar", x1: self.maxTextLen, y1: idx-a:startIdx, x2: self.maxTextLen+1, y2: idx-a:startIdx})
-            endif
-        endfor
         let scrollbarWidth = 1
     endif
     call map(displayedTextList, { idx, val -> val .. repeat(' ', self.maxTextLen + scrollbarWidth - strwidth(val)) })
     let self.highlight = highlight
 
-    return #{textList: displayedTextList, highlight:highlight}
+    return displayedTextList
 endfunction
 function! s:DocWindow.close()
     call self.__window.close()
+    if !empty(self.scrollbarWindow)
+        call self.scrollbarWindow.handleEvent(#{key: "SCROLLBAR_CLOSE"})
+    endif
     let self.isOpen = 0
+endfunction
+
+"-------------------------------------------------------------------------------
+" class ScrollbarWindow extends EventHandler implements dumpContent
+"-------------------------------------------------------------------------------
+let s:ScrollbarWindow = {}
+function! s:ScrollbarWindow.new(winHeight, total, thumbHeight=2)
+    let scrollbarWindow = s:EventHandler.new()
+    call extend(scrollbarWindow, deepcopy(s:ScrollbarWindow, 1), "force")
+    let scrollbarWindow.winHeight = a:winHeight
+    let scrollbarWindow.thumbHeight = a:thumbHeight
+    let scrollbarWindow.total = a:total
+    let scrollbarWindow.winId = rand(srand())
+    let scrollbarWindow.winWidth = 1
+    let scrollbarWindow.winHeight = a:winHeight
+    let scrollbarWindow.isOpen = 0
+    let scrollbarWindow.highlight = []
+
+    let actionMap = {}
+    let actionMap["SCROLLBAR_UPDATE"] =
+                \ { scrollbarUpdateEvent -> function(scrollbarWindow.update, [scrollbarUpdateEvent.scrolledCnt], scrollbarWindow) }
+    let actionMap["SCROLLBAR_CLOSE"] =
+                \ { event -> function(scrollbarWindow.close, [], scrollbarWindow) }
+    let scrollbarWindow.__actionMap = actionMap
+
+    return scrollbarWindow
+endfunction
+function! s:ScrollbarWindow.showAt(x, y)
+    let win = quickui#window#new()
+    let renderContent = self.__calcRenderContent(0)
+    let displayedTextList = renderContent.textList
+
+    let opts = {}
+    let opts.w = self.winWidth
+    let opts.h = self.winHeight
+    let opts.padding = [0, 1, 0, 1]
+    let opts.x = a:x
+    let opts.y = a:y
+    let opts.color = "VmenuDocWindow"
+
+    call win.open(displayedTextList, opts)
+
+    let self.__window = win
+    let self.isOpen = 1
+    let self.x = win.x " column number
+    let self.y = win.y " line number
+    let self.highlight = renderContent.highlight
+
+    call self.__window.show(1)
+    call s:VMenuManager.setFocusedWindow(self)
+
+    call win.syntax_begin(1)
+    for syntax in renderContent.highlight
+        call win.syntax_region(syntax.highlight, syntax.x1, syntax.y1, syntax.x2, syntax.y2)
+    endfor
+
+    call win.syntax_end()
+    redraw
+    return self
+endfunction
+function! s:ScrollbarWindow.__calcRenderContent(scrolled)
+    let textList = mapnew(range(self.winHeight), '" "')
+    let highlight = []
+    let scrollbarOffset = (self.winHeight - self.thumbHeight) * a:scrolled / (self.total - self.winHeight)
+    for i in range(self.thumbHeight)
+        let textList[scrollbarOffset+i] = '█'
+        call add(highlight, #{highlight: "VmenuDocWindowScrollbar", x1: 0, y1: scrollbarOffset+i, x2: 1, y2: scrollbarOffset+i})
+    endfor
+    return #{textList: textList, highlight: highlight}
+endfunction
+function! s:ScrollbarWindow.close()
+    call self.__window.close()
+    let self.isOpen = 0
+endfunction
+function! s:ScrollbarWindow.update(scrolledCnt)
+    let renderContent = self.__calcRenderContent(a:scrolledCnt)
+    let displayedTextList = renderContent.textList
+    call self.__window.set_text(displayedTextList)
+
+    call self.__window.syntax_begin(1)
+    for syntax in renderContent.highlight
+        call self.__window.syntax_region(syntax.highlight, syntax.x1, syntax.y1, syntax.x2, syntax.y2)
+    endfor
+
+    call self.__window.syntax_end()
+    redraw
+endfunction
+function! s:ScrollbarWindow.dumpContent()
+    return #{textList: self.__window.text, highlight: self.highlight}
 endfunction
 
 "-------------------------------------------------------------------------------
@@ -1329,7 +1422,7 @@ function! s:VMenuManager.stopListen()
     let self.__keepGettingInput = 0
 endfunction
 
- " focused context window will receive and handle input
+ " focused context window will receive and handle user input
 function! s:VMenuManager.setFocusedWindow(contextWindow)
     let self.__focusedWindow = a:contextWindow
     call s:log("set focused window: " .. a:contextWindow.winId)
@@ -3474,9 +3567,13 @@ if 0
         "call s:VMenuManager.startListening()
         call assert_equal(["0 ", "1 ", "2 "], s:VMenuManager.__focusedWindow.dumpContent().textList)
         call assert_equal([
-                    \#{highlight: "VmenuDocWindowScrollbar", x1: 1, y1: 0, x2: 2, y2: 0},
-                    \#{highlight: "VmenuDocWindowScrollbar", x1: 1, y1: 1, x2: 2, y2: 1}],
-                    \s:VMenuManager.__focusedWindow.dumpContent().highlight)
+                    \#{highlight: "VmenuDocWindowScrollbar", x1: 0, y1: 0, x2: 1, y2: 0},
+                    \#{highlight: "VmenuDocWindowScrollbar", x1: 0, y1: 1, x2: 1, y2: 1}],
+                    \s:VMenuManager.__focusedWindow.scrollbarWindow.dumpContent().highlight)
+        call assert_equal(s:VMenuManager.__focusedWindow.x+1,
+                    \s:VMenuManager.__focusedWindow.scrollbarWindow.x)
+        call assert_equal(s:VMenuManager.__focusedWindow.y,
+                    \s:VMenuManager.__focusedWindow.scrollbarWindow.y)
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
     endif
 
@@ -3504,6 +3601,21 @@ if 0
         call s:VMenuManager.__focusedWindow.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(mainWindow, 0, 2)))
         call assert_equal(0, s:VMenuManager.__focusedWindow.subVmenuWindow.isOpen)
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+    endif
+
+    " ScrollbarWindow test
+    if 1
+        let scrollbarWidow = s:ScrollbarWindow.new(5, 10, 2)
+                    \.showAt(0, 0)
+        call assert_equal(['█', '█', ' ', ' ', ' '], scrollbarWidow.dumpContent().textList)
+        call assert_equal([
+                    \#{highlight: "VmenuDocWindowScrollbar", x1: 0, y1: 0, x2: 1, y2: 0},
+                    \#{highlight: "VmenuDocWindowScrollbar", x1: 0, y1: 1, x2: 1, y2: 1}],
+                    \scrollbarWidow.dumpContent().highlight)
+        call scrollbarWidow.update(5)
+        call assert_equal([' ', ' ', ' ', '█', '█'], scrollbarWidow.dumpContent().textList)
+        call scrollbarWidow.close()
+        call assert_equal(0, scrollbarWidow.isOpen)
     endif
 
     call s:showErrors()
