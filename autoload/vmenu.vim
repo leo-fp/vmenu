@@ -857,7 +857,7 @@ function! s:ContextItem.new(dict)
     let contextItem.syntaxRegionList       = [] " [[highlight, start (inclusive), end (exclusive)]]
     let contextItem.itemVersion     = get(a:dict, 'itemVersion', 0)  " context item version. see: g:VMENU#ITEM_VERSION
     let contextItem.group           = get(a:dict, 'group', '')  " group name of current item
-    let contextItem.doc             = get(a:dict, 'doc', '')  " document text of current item
+    let contextItem.doc             = get(a:dict, 'doc', [])  " document text of current item
     return contextItem
 endfunction
 
@@ -1466,7 +1466,7 @@ function! s:ItemParser.parseVMenuItem(userItem)
     let descPos   = -1    " will be calculated when context window created
     let descWidth = get(quickuiItem, 'desc_width', 0)
     let group     = get(a:userItem, 'group', '')
-    let doc       = get(a:userItem, 'doc', '')
+    let doc       = get(a:userItem, 'doc', [])
     let subItemList = []
     if (has_key(a:userItem, 'subItemList'))
         for item in get(a:userItem, 'subItemList')
