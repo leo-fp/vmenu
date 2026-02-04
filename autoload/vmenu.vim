@@ -1114,8 +1114,7 @@ function! s:DocWindow.new(textList, parentVmenuWindow, maxHeight)
 endfunction
 function! s:DocWindow.showAt(x, y)
     let win = quickui#window#new()
-    let renderContent = self.__calcRenderText(self.__startIdx, self.__startIdx+self.winHeight-1)
-    let displayedTextList = renderContent
+    let displayedTextList = self.textList[self.__startIdx:self.__startIdx+self.winHeight-1]
     if len(self.textList) > self.winHeight
         let self.winWidth = self.winWidth + 1   " plus one for scrollbar
     endif
@@ -1167,7 +1166,7 @@ function! s:DocWindow.scrollDown()
     endif
 
     let self.__startIdx = self.__startIdx + 1
-    let renderContent = self.__calcRenderText(self.__startIdx, self.__startIdx+self.winHeight-1)
+    let renderContent = self.textList[self.__startIdx:self.__startIdx+self.winHeight-1]
     call self.__window.set_text(renderContent)
     redraw
     if !empty(self.scrollbarWindow) && self.scrollbarWindow.isOpen == 1
@@ -1181,27 +1180,13 @@ function! s:DocWindow.scrollUp()
     endif
 
     let self.__startIdx = self.__startIdx - 1
-    let renderContent = self.__calcRenderText(self.__startIdx, self.__startIdx+self.winHeight-1)
+    let renderContent = self.textList[self.__startIdx:self.__startIdx+self.winHeight-1]
 
     call self.__window.set_text(renderContent)
     redraw
     if !empty(self.scrollbarWindow) && self.scrollbarWindow.isOpen == 1
         call self.scrollbarWindow.handleEvent(s:ScrollbarUpdateEvent.new(self.__startIdx))
     endif
-endfunction
-" endIdx is inclusive
-function! s:DocWindow.__calcRenderText(startIdx, endIdx)
-    let displayedTextList = self.textList[a:startIdx:a:endIdx]
-    let highlight = []
-    let scrollbarWidth = 0
-
-    if self.textList->len() > self.winHeight    " need to add scrollbar
-        let scrollbarWidth = 1
-    endif
-    call map(displayedTextList, { idx, val -> val .. repeat(' ', self.maxTextLen + scrollbarWidth - strwidth(val)) })
-    let self.highlight = highlight
-
-    return displayedTextList
 endfunction
 function! s:DocWindow.close()
     call self.__window.close()
@@ -3451,7 +3436,7 @@ if 0
         let docWindow1 = s:VMenuManager.__focusedWindow
         call assert_equal(["hello", "vmenu"], docWindow1.dumpContent().textList)
         call docWindow1.handleEvent(s:KeyStrokeEvent.new("j"))
-        call assert_equal(["hello ", "vmenu2"], s:VMenuManager.__focusedWindow.dumpContent().textList)
+        call assert_equal(["hello", "vmenu2"], s:VMenuManager.__focusedWindow.dumpContent().textList)
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
         call assert_equal(0, s:VMenuManager.__focusedWindow.isOpen)
         call assert_equal(0, s:VMenuManager.__focusedWindow.parentVmenuWindow.isOpen)
@@ -3521,7 +3506,7 @@ if 0
                     \.build()
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
-        call assert_equal(["0   ", "1   ", "2   "], s:VMenuManager.__focusedWindow.dumpContent().textList)
+        call assert_equal([0, 1, 2], s:VMenuManager.__focusedWindow.dumpContent().textList)
         call assert_equal(4, s:VMenuManager.__focusedWindow.winWidth)
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
     endif
@@ -3540,15 +3525,15 @@ if 0
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<C-E>"))
-        call assert_equal(["1 ", "2 ", "3 "], s:VMenuManager.__focusedWindow.dumpContent().textList)
+        call assert_equal([1, 2, 3], s:VMenuManager.__focusedWindow.dumpContent().textList)
         " reach the bottom. keep as is
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<C-E>"))
-        call assert_equal(["1 ", "2 ", "3 "], s:VMenuManager.__focusedWindow.dumpContent().textList)
+        call assert_equal([1, 2, 3], s:VMenuManager.__focusedWindow.dumpContent().textList)
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<C-Y>"))
-        call assert_equal(["0 ", "1 ", "2 "], s:VMenuManager.__focusedWindow.dumpContent().textList)
+        call assert_equal([0, 1, 2], s:VMenuManager.__focusedWindow.dumpContent().textList)
         " reach the top. keep as is
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<C-Y>"))
-        call assert_equal(["0 ", "1 ", "2 "], s:VMenuManager.__focusedWindow.dumpContent().textList)
+        call assert_equal([0, 1, 2], s:VMenuManager.__focusedWindow.dumpContent().textList)
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
     endif
 
@@ -3565,7 +3550,7 @@ if 0
                     \.build()
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
-        call assert_equal(["0 ", "1 ", "2 "], s:VMenuManager.__focusedWindow.dumpContent().textList)
+        call assert_equal([0, 1, 2], s:VMenuManager.__focusedWindow.dumpContent().textList)
         call assert_equal([
                     \#{highlight: "VmenuDocWindowScrollbar", x1: 0, y1: 0, x2: 1, y2: 0},
                     \#{highlight: "VmenuDocWindowScrollbar", x1: 0, y1: 1, x2: 1, y2: 1}],
