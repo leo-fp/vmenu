@@ -415,7 +415,7 @@ function! s:EventHandler.handleEvent(inputEvent)
     call self.dispatch(a:inputEvent)
 endfunction
 function! s:EventHandler.dispatch(inputEvent)
-    call get(self.__actionMap, a:inputEvent.key, { -> { -> ''}})(a:inputEvent)()
+    call get(self.__actionMap, a:inputEvent.key, { -> ''})(a:inputEvent)
 endfunction
 
 "-------------------------------------------------------------------------------
@@ -489,17 +489,17 @@ function! s:ContextWindow.new(contextWindowBuilder)
     call s:log(printf("new ContextWindow created, winId: %s", contextWindow.winId))
 
     let actionMap = {}
-    let actionMap[a:contextWindowBuilder.__closeKey]      = { event -> function(contextWindow.close,       [s:CLOSE_SELF_ONLY, s:KeyStrokeEvent.new(a:contextWindowBuilder.__closeKey)], contextWindow) }
-    let actionMap[a:contextWindowBuilder.__goNextKey]     = { event -> function(contextWindow.focusNext,          [], contextWindow) }
-    let actionMap[a:contextWindowBuilder.__goPreviousKey] = { event -> function(contextWindow.focusPrev,          [], contextWindow) }
-    let actionMap[a:contextWindowBuilder.__goBottomKey]   = { event -> function(contextWindow.focusBottom,        [], contextWindow) }
-    let actionMap[a:contextWindowBuilder.__confirmKey]    = { event -> function(contextWindow.enter,              [], contextWindow) }
-    let actionMap["\<LeftMouse>"]                         = { mouseClickEvent -> function(contextWindow.executeByLeftMouse, [mouseClickEvent], contextWindow) }
-    let actionMap["VMENU_MOUSE_HOVER"]                    = { mouseHoverEvent -> function(contextWindow.__onMouseHover,     [mouseHoverEvent], contextWindow) }
-    let actionMap["VMENU_SUB_MENU_CLOSE"]                 = { subMenuClosedEvent -> function(contextWindow.__onSubMenuClose,   [subMenuClosedEvent.closeCode, subMenuClosedEvent.event], contextWindow) }
-    let actionMap["VMENU_RECURSIVE_CLOSE"]                      = { event -> function(contextWindow.close,   [s:RECURSIVE_CLOSE, {}], contextWindow) }
+    let actionMap[a:contextWindowBuilder.__closeKey]      = { event -> contextWindow.close(s:CLOSE_SELF_ONLY, s:KeyStrokeEvent.new(a:contextWindowBuilder.__closeKey)) }
+    let actionMap[a:contextWindowBuilder.__goNextKey]     = { event -> contextWindow.focusNext() }
+    let actionMap[a:contextWindowBuilder.__goPreviousKey] = { event -> contextWindow.focusPrev() }
+    let actionMap[a:contextWindowBuilder.__goBottomKey]   = { event -> contextWindow.focusBottom() }
+    let actionMap[a:contextWindowBuilder.__confirmKey]    = { event -> contextWindow.enter() }
+    let actionMap["\<LeftMouse>"]                         = { mouseClickEvent -> contextWindow.executeByLeftMouse(mouseClickEvent) }
+    let actionMap["VMENU_MOUSE_HOVER"]                    = { mouseHoverEvent -> contextWindow.__onMouseHover(mouseHoverEvent) }
+    let actionMap["VMENU_SUB_MENU_CLOSE"]                 = { subMenuClosedEvent -> contextWindow.__onSubMenuClose(subMenuClosedEvent.closeCode, subMenuClosedEvent.event) }
+    let actionMap["VMENU_RECURSIVE_CLOSE"]                = { event -> contextWindow.close(s:RECURSIVE_CLOSE, {}) }
     for hotKey in contextWindow.hotKeyList
-        let actionMap[hotKey.keyChar] = { event -> function(contextWindow.executeByHotKey, [event.key], contextWindow) }
+        let actionMap[hotKey.keyChar]                     = { event -> contextWindow.executeByHotKey(event.key) }
     endfor
 
     let contextWindow.__actionMap = actionMap
@@ -945,17 +945,17 @@ function! s:TopMenuWindow.new(topMenuWindowBuilder)
     call s:log(printf("new TopMenuWindow created, winId: %s", topMenuWindow.winId))
 
     let actionMap = {}
-    let actionMap[a:topMenuWindowBuilder.__closeKey]      = { event -> function(topMenuWindow.close,              [s:CLOSE_SELF_ONLY, a:topMenuWindowBuilder.__closeKey], topMenuWindow) }
-    let actionMap[a:topMenuWindowBuilder.__goNextKey]     = { event -> function(topMenuWindow.focusNext,          [], topMenuWindow) }
-    let actionMap[a:topMenuWindowBuilder.__goPreviousKey] = { event -> function(topMenuWindow.focusPrev,          [], topMenuWindow) }
-    let actionMap[a:topMenuWindowBuilder.__goBottomKey]   = { event -> function(topMenuWindow.focusBottom,        [], topMenuWindow) }
-    let actionMap[a:topMenuWindowBuilder.__confirmKey]    = { event -> function(topMenuWindow.enter,              [], topMenuWindow) }
-    let actionMap["\<LeftMouse>"]                         = { event -> function(topMenuWindow.executeByLeftMouse, [event], topMenuWindow) }
-    let actionMap["VMENU_MOUSE_HOVER"]                    = { event -> function(topMenuWindow.__onMouseHover,     [event], topMenuWindow) }
-    let actionMap["VMENU_SUB_MENU_CLOSE"]                 = { event -> function(topMenuWindow.__onSubMenuClose,    [event.closeCode, event.event], topMenuWindow) }
-    let actionMap["VMENU_RECURSIVE_CLOSE"]                      = { event -> function(topMenuWindow.close,   [s:RECURSIVE_CLOSE], topMenuWindow) }
+    let actionMap[a:topMenuWindowBuilder.__closeKey]      = { event -> topMenuWindow.close(s:CLOSE_SELF_ONLY, a:topMenuWindowBuilder.__closeKey) }
+    let actionMap[a:topMenuWindowBuilder.__goNextKey]     = { event -> topMenuWindow.focusNext() }
+    let actionMap[a:topMenuWindowBuilder.__goPreviousKey] = { event -> topMenuWindow.focusPrev() }
+    let actionMap[a:topMenuWindowBuilder.__goBottomKey]   = { event -> topMenuWindow.focusBottom() }
+    let actionMap[a:topMenuWindowBuilder.__confirmKey]    = { event -> topMenuWindow.enter() }
+    let actionMap["\<LeftMouse>"]                         = { event -> topMenuWindow.executeByLeftMouse(event) }
+    let actionMap["VMENU_MOUSE_HOVER"]                    = { event -> topMenuWindow.__onMouseHover(event) }
+    let actionMap["VMENU_SUB_MENU_CLOSE"]                 = { event -> topMenuWindow.__onSubMenuClose(event.closeCode, event.event) }
+    let actionMap["VMENU_RECURSIVE_CLOSE"]                = { event -> topMenuWindow.close(s:RECURSIVE_CLOSE) }
     for hotKey in topMenuWindow.hotKeyList
-        let actionMap[hotKey['keyChar']] = { event -> function(topMenuWindow.executeByHotKey, [event.key], topMenuWindow) }
+        let actionMap[hotKey['keyChar']]                  = { event -> topMenuWindow.executeByHotKey(event.key) }
     endfor
 
     let topMenuWindow.__actionMap = actionMap
@@ -1101,9 +1101,9 @@ function! s:DocWindow.new(textList, parentVmenuWindow, maxHeight)
     let actionMap = {}
     let scrollDownKey = s:doc_window_scroll_down_key
     let scrollUpKey = s:doc_window_scroll_up_key
-    let actionMap[scrollDownKey]      = { event -> function(docWindow.scrollDown, [], docWindow) }
-    let actionMap[scrollUpKey]        = { event -> function(docWindow.scrollUp, [], docWindow) }
-    let actionMap["VMENU_CLOSE_DOC_WINDOW"]        = { event -> function(docWindow.close, [], docWindow) }
+    let actionMap[scrollDownKey]            = { event -> docWindow.scrollDown() }
+    let actionMap[scrollUpKey]              = { event -> docWindow.scrollUp() }
+    let actionMap["VMENU_CLOSE_DOC_WINDOW"] = { event -> docWindow.close() }
     let docWindow.__actionMap = actionMap
 
     " visible window width. max width in text list
@@ -1153,7 +1153,7 @@ function! s:DocWindow.showAt(x, y)
 endfunction
 function! s:DocWindow.dispatch(inputEvent)
     if has_key(self.__actionMap, a:inputEvent.key)
-        call get(self.__actionMap, a:inputEvent.key, { -> { -> ''}})(a:inputEvent)()
+        call get(self.__actionMap, a:inputEvent.key, { -> ''})(a:inputEvent)
     else
         call self.parentVmenuWindow.handleEvent(a:inputEvent)
     endif
@@ -1218,9 +1218,9 @@ function! s:ScrollbarWindow.new(winHeight, total, thumbHeight=2, barWinColor="Vm
 
     let actionMap = {}
     let actionMap["SCROLLBAR_UPDATE"] =
-                \ { scrollbarUpdateEvent -> function(scrollbarWindow.update, [scrollbarUpdateEvent.scrolledCnt], scrollbarWindow) }
+                \ { scrollbarUpdateEvent -> scrollbarWindow.update(scrollbarUpdateEvent.scrolledCnt) }
     let actionMap["SCROLLBAR_CLOSE"] =
-                \ { event -> function(scrollbarWindow.close, [], scrollbarWindow) }
+                \ { event -> scrollbarWindow.close() }
     let scrollbarWindow.__actionMap = actionMap
 
 
