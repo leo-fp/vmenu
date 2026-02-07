@@ -139,7 +139,7 @@ hi! VmenuInactive guifg=#4D5360
 hi! VmenuHotkey1 gui=underline guifg=#BEC0C6
 hi! VmenuSelectedHotkey gui=underline guibg=#2E436E guifg=#BEC0C6
 hi! VmenuInactiveHotKey gui=underline guifg=#4D5360
-hi! VmenuScrollbar guibg=#4D4D4F
+hi! VmenuScrollbar guibg=#4D4D4F guifg=#4D4D4F
 hi! VmenuDocWindowScrollbar guibg=#67676A guifg=#67676A " thumb highlight
 hi! VmenuDocWindow guifg=#BEC0C6 guibg=#565656
 
@@ -319,6 +319,10 @@ function! s:VmenuWindow.close(closeCode, event={})
         " make sure no vmenu item tips left
         echo vmenu#itemTips()
     endif
+
+    if has_key(self, 'scrollbarWindow') && !empty(self.scrollbarWindow)
+        call self.scrollbarWindow.handleEvent(#{key: "SCROLLBAR_CLOSE"})
+    endif
 endfunction
 
 function! s:VmenuWindow.__onSubMenuClose(closeCode, event)
@@ -482,6 +486,7 @@ function! s:ContextWindow.new(contextWindowBuilder)
     let contextWindow.isOpen = 0
     let contextWindow.parentVmenuWindow = a:contextWindowBuilder.__parentContextWindow
     let contextWindow.docWindow = {}
+    let contextWindow.scrollbarWindow = {}
     call s:log(printf("new ContextWindow created, winId: %s", contextWindow.winId))
 
     let actionMap = {}
@@ -570,6 +575,13 @@ function! s:ContextWindow.showAt(x, y)
 
     call s:log(printf("ContextWindow opened at x:%s, y:%s, vmenu winId: %s,
                 \ quickui winId: %s", self.x, self.y, self.winId, self.quickuiWindow.winid))
+
+    let needActivateScrollbar = self.scrollingWindowSize < self.contextItemList->len()
+    if needActivateScrollbar
+        let scrollbarWidow = s:ScrollbarWindow.new(self.scrollingWindowSize, self.contextItemList->len(), 2, "VmenuBg", "VmenuScrollbar")
+        call scrollbarWidow.showAt(self.x+self.winWidth-1, self.y)
+        let self.scrollbarWindow = scrollbarWidow
+    endif
     return self
 endfunction
 function! s:ContextWindow.showAtCursor()
@@ -735,24 +747,11 @@ function! s:ContextWindow.__renderHighlight(offset)
         let self.renderEndIdx = max([0, a:offset]) + self.scrollingWindowSize - 1
     endif
 
+    let needActivateScrollbar = self.scrollingWindowSize < self.contextItemList->len()
     for index in range(self.renderStartIdx, self.renderEndIdx)
         let curItem = self.contextItemList[index]
         let curItem.syntaxRegionList = []
-        let needActivateScrollbar = self.scrollingWindowSize < self.contextItemList->len()
         let endColumnNr = needActivateScrollbar ? win.opts.w - 1 : win.opts.w
-
-        " scrollbar
-        if needActivateScrollbar == 1
-            let scrollbarOffset = (self.scrollingWindowSize - scrollbarHeight) * self.renderStartIdx / (self.contextItemList->len() - self.scrollingWindowSize)
-            let scrollbarStartIdx = self.renderStartIdx + scrollbarOffset
-            if scrollbarStartIdx <= index && index < scrollbarStartIdx + scrollbarHeight
-                call add(curItem.syntaxRegionList, ["VmenuScrollbar", win.opts.w-1, win.opts.w])
-            endif
-            call s:log("index: " .. index
-                        \ .. ", renderStartIdx: " .. self.renderStartIdx
-                        \ .. ", scrollbarOffset: " .. scrollbarOffset
-                        \ .. ", scrollbarHeight: " .. scrollbarHeight)
-        endif
 
         " inactive item
         if curItem.isInactive(self.__editorStatusSupplier()) == 1
@@ -812,6 +811,10 @@ function! s:ContextWindow.__renderHighlight(offset)
 
     call win.syntax_end()
     redraw
+
+    if !empty(self.scrollbarWindow) && self.scrollbarWindow.isOpen == 1
+        call self.scrollbarWindow.handleEvent(s:ScrollbarUpdateEvent.new(self.renderStartIdx))
+    endif
 endfunction
 
 function! s:ContextWindow.__openDocWindowIfAvaliable()
@@ -1200,7 +1203,7 @@ endfunction
 " class ScrollbarWindow extends EventHandler implements dumpContent
 "-------------------------------------------------------------------------------
 let s:ScrollbarWindow = {}
-function! s:ScrollbarWindow.new(winHeight, total, thumbHeight=2)
+function! s:ScrollbarWindow.new(winHeight, total, thumbHeight=2, barWinColor="VmenuDocWindow", thumbColor="VmenuDocWindowScrollbar")
     let scrollbarWindow = s:EventHandler.new()
     call extend(scrollbarWindow, deepcopy(s:ScrollbarWindow, 1), "force")
     let scrollbarWindow.winHeight = a:winHeight
@@ -1211,6 +1214,8 @@ function! s:ScrollbarWindow.new(winHeight, total, thumbHeight=2)
     let scrollbarWindow.winHeight = a:winHeight
     let scrollbarWindow.isOpen = 0
     let scrollbarWindow.highlight = []
+    let scrollbarWindow.thumbColor = a:thumbColor
+    let scrollbarWindow.barWinColor = a:barWinColor
 
     let actionMap = {}
     let actionMap["SCROLLBAR_UPDATE"] =
@@ -1219,6 +1224,8 @@ function! s:ScrollbarWindow.new(winHeight, total, thumbHeight=2)
                 \ { event -> function(scrollbarWindow.close, [], scrollbarWindow) }
     let scrollbarWindow.__actionMap = actionMap
 
+
+    call s:log(printf("scrollbar window created, winId: %s", scrollbarWindow.winId))
     return scrollbarWindow
 endfunction
 function! s:ScrollbarWindow.showAt(x, y)
@@ -1232,7 +1239,7 @@ function! s:ScrollbarWindow.showAt(x, y)
     let opts.padding = [0, 1, 0, 1]
     let opts.x = a:x
     let opts.y = a:y
-    let opts.color = "VmenuDocWindow"
+    let opts.color = self.barWinColor
 
     call win.open(displayedTextList, opts)
 
@@ -1243,7 +1250,6 @@ function! s:ScrollbarWindow.showAt(x, y)
     let self.highlight = renderContent.highlight
 
     call self.__window.show(1)
-    call s:VMenuManager.setFocusedWindow(self)
 
     call win.syntax_begin(1)
     for syntax in renderContent.highlight
@@ -1260,7 +1266,7 @@ function! s:ScrollbarWindow.__calcRenderContent(scrolled)
     let scrollbarOffset = (self.winHeight - self.thumbHeight) * a:scrolled / (self.total - self.winHeight)
     for i in range(self.thumbHeight)
         let textList[scrollbarOffset+i] = '█'
-        call add(highlight, #{highlight: "VmenuDocWindowScrollbar", x1: 0, y1: scrollbarOffset+i, x2: 1, y2: scrollbarOffset+i})
+        call add(highlight, #{highlight: self.thumbColor, x1: 0, y1: scrollbarOffset+i, x2: 1, y2: scrollbarOffset+i})
     endfor
     return #{textList: textList, highlight: highlight}
 endfunction
@@ -1272,6 +1278,7 @@ function! s:ScrollbarWindow.update(scrolledCnt)
     let renderContent = self.__calcRenderContent(a:scrolledCnt)
     let displayedTextList = renderContent.textList
     call self.__window.set_text(displayedTextList)
+    let self.highlight = renderContent.highlight
 
     call self.__window.syntax_begin(1)
     for syntax in renderContent.highlight
@@ -2937,25 +2944,25 @@ if 0
     " test scroll bar reaches the bottom when focusing last item
     if 1
         call s:ContextWindow.builder()
-                    \.contextItemList(s:VMenuManager.parseContextItem([
-                    \#{name: "test", subItemList:
+                    \.contextItemList(s:VMenuManager.parseContextItem(
                     \ map(range(80),
                     \  { idx, val
                     \  -> #{
-                    \       name: val
+                    \       name: val,
+                    \       cmd: ''
                     \      }
                     \  })
-                    \},
-                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \, g:VMENU#ITEM_VERSION.VMENU))
                     \.scrollingWindowSize(10)
                     \.build()
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
-        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<CR>"))
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("G"))
-        call assert_equal(['VmenuScrollbar', 6, 7], s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList[0])
+        call assert_equal([
+                    \#{highlight: "VmenuScrollbar", x1: 0, y1: 8, x2: 1, y2: 8},
+                    \#{highlight: "VmenuScrollbar", x1: 0, y1: 9, x2: 1, y2: 9}
+                    \], s:VMenuManager.__focusedWindow.scrollbarWindow.dumpContent().highlight)
 
-        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
     endif
 
@@ -3001,7 +3008,10 @@ if 0
                     \.build()
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
-        call assert_equal(['VmenuScrollbar', 5, 6], s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList[0])
+        call assert_equal([
+                    \#{highlight: "VmenuScrollbar", x1: 0, y1: 0, x2: 1, y2: 0},
+                    \#{highlight: "VmenuScrollbar", x1: 0, y1: 1, x2: 1, y2: 1}
+                    \], s:VMenuManager.__focusedWindow.scrollbarWindow.dumpContent().highlight)
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
     endif
 
