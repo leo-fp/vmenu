@@ -161,7 +161,7 @@ function! s:VmenuWindowBuilder.new()
     let vmenuWindowBuilder.__errConsumer = function("s:printWarn")
     let vmenuWindowBuilder.__minWidth = s:min_context_menu_width   " minimal window width. only supported in context menu
     let vmenuWindowBuilder.__editorStatusSupplier = function("s:getEditorStatus")
-    let vmenuWindowBuilder.__scrollingWindowSize = 20    " the number of entries in the scrolling window
+    let vmenuWindowBuilder.__winHeight = 20    " maxmium window width. only supported in context menu
     return vmenuWindowBuilder
 endfunction
 function! s:VmenuWindowBuilder.delay(seconds)
@@ -196,8 +196,8 @@ function! s:VmenuWindowBuilder.minWidth(width)
     let self.__minWidth = a:width
     return self
 endfunction
-function! s:VmenuWindowBuilder.scrollingWindowSize(itemCnt)
-    let self.__scrollingWindowSize = a:itemCnt
+function! s:VmenuWindowBuilder.winHeight(winHeight)
+    let self.__winHeight = a:winHeight
     return self
 endfunction
 function! s:VmenuWindowBuilder.editorStatusSupplier(editorStatusSupplier)
@@ -466,10 +466,9 @@ function! s:ContextWindow.new(contextWindowBuilder)
     let contextWindow.winId = rand(srand())
     let contextWindow.hotKeyList = []
     let contextWindow.winWidth = strwidth(empty(contextWindow.contextItemList) ? 0 : contextWindow.contextItemList[0].name)
-    let contextWindow.winHeight = contextWindow.contextItemList->len()
-    let contextWindow.scrollingWindowSize = min([a:contextWindowBuilder.__scrollingWindowSize, contextWindow.winHeight])
+    let contextWindow.winHeight = min([a:contextWindowBuilder.__winHeight, contextWindow.contextItemList->len()])
     let contextWindow.renderStartIdx = 0
-    let contextWindow.renderEndIdx = min([a:contextWindowBuilder.__scrollingWindowSize-1, contextWindow.winHeight-1])
+    let contextWindow.renderEndIdx = min([a:contextWindowBuilder.__winHeight-1, contextWindow.winHeight-1])
     let contextWindow.__componentLength = contextWindow.contextItemList->len()
     let contextWindow.x = a:contextWindowBuilder.__x " column number
     let contextWindow.y = a:contextWindowBuilder.__y " line number
@@ -555,7 +554,7 @@ function! s:ContextWindow.showAt(x, y)
 
     let opts = {}
     let text = self.__renderText(0, self.renderEndIdx)
-    let opts.h = self.scrollingWindowSize
+    let opts.h = self.winHeight
     let opts.w = self.winWidth
     let opts.color = "VmenuBg"
     let opts.y = a:y
@@ -576,9 +575,9 @@ function! s:ContextWindow.showAt(x, y)
     call s:log(printf("ContextWindow opened at x:%s, y:%s, vmenu winId: %s,
                 \ quickui winId: %s", self.x, self.y, self.winId, self.quickuiWindow.winid))
 
-    let needActivateScrollbar = self.scrollingWindowSize < self.contextItemList->len()
+    let needActivateScrollbar = self.winHeight < self.contextItemList->len()
     if needActivateScrollbar
-        let scrollbarWidow = s:ScrollbarWindow.new(self.scrollingWindowSize, self.contextItemList->len(), 2, "VmenuBg", "VmenuScrollbar")
+        let scrollbarWidow = s:ScrollbarWindow.new(self.winHeight, self.contextItemList->len(), 2, "VmenuBg", "VmenuScrollbar")
         call scrollbarWidow.showAt(self.x+self.winWidth-1, self.y)
         let self.scrollbarWindow = scrollbarWidow
     endif
@@ -613,7 +612,7 @@ endfunction
 function! s:ContextWindow.isInArea(x, y)
     let topLeftCorner = s:VMenuManager.calcTopLeftPos(self)
     if (topLeftCorner.x <= a:x && a:x <= topLeftCorner.x + self.winWidth) &&
-                \ (topLeftCorner.y <= a:y && a:y < topLeftCorner.y + self.scrollingWindowSize)
+                \ (topLeftCorner.y <= a:y && a:y < topLeftCorner.y + self.winHeight)
         return 1
     else
         return 0
@@ -738,16 +737,16 @@ function! s:ContextWindow.__renderHighlight(offset)
     let win = self.quickuiWindow
 
     let scrollbarHeight = 2 " fixed scrollbar length
-    if a:offset >= (self.renderStartIdx + self.scrollingWindowSize)
-        let self.renderStartIdx = a:offset - self.scrollingWindowSize + 1
+    if a:offset >= (self.renderStartIdx + self.winHeight)
+        let self.renderStartIdx = a:offset - self.winHeight + 1
         let self.renderEndIdx = a:offset
     endif
     if a:offset < self.renderStartIdx
         let self.renderStartIdx = max([0, a:offset])
-        let self.renderEndIdx = max([0, a:offset]) + self.scrollingWindowSize - 1
+        let self.renderEndIdx = max([0, a:offset]) + self.winHeight - 1
     endif
 
-    let needActivateScrollbar = self.scrollingWindowSize < self.contextItemList->len()
+    let needActivateScrollbar = self.winHeight < self.contextItemList->len()
     for index in range(self.renderStartIdx, self.renderEndIdx)
         let curItem = self.contextItemList[index]
         let curItem.syntaxRegionList = []
@@ -2908,7 +2907,7 @@ if 0
                     \#{name: '1', cmd: ''},
                     \#{name: '2', cmd: ''},
                     \], g:VMENU#ITEM_VERSION.VMENU))
-                    \.scrollingWindowSize(1)
+                    \.winHeight(1)
                     \.build()
                     \.showAtCursor()
         call assert_equal(0, s:VMenuManager.__focusedWindow.renderStartIdx)
@@ -2930,7 +2929,7 @@ if 0
                     \#{name: '1', cmd: ''},
                     \#{name: '2', cmd: ''},
                     \], g:VMENU#ITEM_VERSION.VMENU))
-                    \.scrollingWindowSize(1)
+                    \.winHeight(1)
                     \.build()
                     \.showAtCursor()
         call assert_true([] != filter(copy(s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList), {idx, val -> val == ['VmenuSelect', 0, 5]}))
@@ -2953,7 +2952,7 @@ if 0
                     \      }
                     \  })
                     \, g:VMENU#ITEM_VERSION.VMENU))
-                    \.scrollingWindowSize(10)
+                    \.winHeight(10)
                     \.build()
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
@@ -2966,14 +2965,14 @@ if 0
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
     endif
 
-    " show scrollbar when item size > scrollingWindowSize
+    " show scrollbar when item size > winHeight
     if 1
         call s:ContextWindow.builder()
                     \.contextItemList(s:VMenuManager.parseContextItem([
                     \#{name: '1', cmd: ''},
                     \#{name: '2', cmd: ''},
                     \], g:VMENU#ITEM_VERSION.VMENU))
-                    \.scrollingWindowSize(20)
+                    \.winHeight(20)
                     \.build()
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
@@ -2988,7 +2987,7 @@ if 0
                     \#{name: '3', cmd: ''},
                     \#{name: '4', cmd: ''},
                     \], g:VMENU#ITEM_VERSION.VMENU))
-                    \.scrollingWindowSize(5)
+                    \.winHeight(5)
                     \.build()
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
@@ -3004,7 +3003,7 @@ if 0
                     \#{name: '4', cmd: ''},
                     \#{name: '5', cmd: ''},
                     \], g:VMENU#ITEM_VERSION.VMENU))
-                    \.scrollingWindowSize(5)
+                    \.winHeight(5)
                     \.build()
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
@@ -3027,7 +3026,7 @@ if 0
                     \#{name: '4', cmd: 'call vmenu#testEcho(4)'},
                     \#{name: '5', cmd: 'call vmenu#testEcho(5)'},
                     \], g:VMENU#ITEM_VERSION.VMENU))
-                    \.scrollingWindowSize(5)
+                    \.winHeight(5)
                     \.build()
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
@@ -3048,7 +3047,7 @@ if 0
                     \#{name: '4', cmd: ''},
                     \#{name: '5', subItemList: [#{name: '5.1', cmd: ''}]},
                     \], g:VMENU#ITEM_VERSION.VMENU))
-                    \.scrollingWindowSize(5)
+                    \.winHeight(5)
                     \.build()
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
@@ -3063,7 +3062,7 @@ if 0
                     \#{name: '0', cmd: ''},
                     \#{name: '1', cmd: ''},
                     \], g:VMENU#ITEM_VERSION.VMENU))
-                    \.scrollingWindowSize(5)
+                    \.winHeight(5)
                     \.build()
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
@@ -3100,7 +3099,7 @@ if 0
                     \#{name: '0', cmd: ''},
                     \#{name: '1', subItemList: [#{name: "1.1", cmd: ''}]},
                     \], g:VMENU#ITEM_VERSION.VMENU))
-                    \.scrollingWindowSize(5)
+                    \.winHeight(5)
                     \.build()
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
@@ -3139,7 +3138,7 @@ if 0
                     \#{name: '0', cmd: ''},
                     \#{isSep: 1},
                     \], g:VMENU#ITEM_VERSION.VMENU))
-                    \.scrollingWindowSize(5)
+                    \.winHeight(5)
                     \.build()
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
@@ -3204,7 +3203,7 @@ if 0
                     \.contextItemList(s:VMenuManager.parseContextItem([
                     \#{name: '1', cmd: ''},
                     \], g:VMENU#ITEM_VERSION.VMENU))
-                    \.scrollingWindowSize(5)
+                    \.winHeight(5)
                     \.build()
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
@@ -3219,7 +3218,7 @@ if 0
                     \.contextItemList(s:VMenuManager.parseContextItem([
                     \#{name: '1', cmd: '', subItemList: [#{name: "1.1", cmd: ''}]},
                     \], g:VMENU#ITEM_VERSION.VMENU))
-                    \.scrollingWindowSize(5)
+                    \.winHeight(5)
                     \.build()
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
