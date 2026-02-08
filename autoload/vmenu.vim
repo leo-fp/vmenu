@@ -161,7 +161,7 @@ function! s:VmenuWindowBuilder.new()
     let vmenuWindowBuilder.__errConsumer = function("s:printWarn")
     let vmenuWindowBuilder.__minWidth = s:min_context_menu_width   " minimal window width. only supported in context menu
     let vmenuWindowBuilder.__editorStatusSupplier = function("s:getEditorStatus")
-    let vmenuWindowBuilder.__winHeight = 20    " maxmium window height. only supported in context menu
+    let vmenuWindowBuilder.__winHeight = float2nr(&lines * 0.8)    " maxmium window height. only supported in context menu
     return vmenuWindowBuilder
 endfunction
 function! s:VmenuWindowBuilder.delay(seconds)
