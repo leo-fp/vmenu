@@ -350,6 +350,18 @@ endfunction
 function! s:VmenuWindow.__onMouseHover(event)
     let itemIdxAtMousePos = self.getItemIndexOnPos(a:event.mousepos)
 
+    if itemIdxAtMousePos == -1
+        if empty(self.subVmenuWindow) || self.subVmenuWindow.isOpen == 0
+            call self.__renderHighlight(-1)
+        endif
+
+        if !empty(self.parentVmenuWindow)
+            call self.parentVmenuWindow.handleEvent(a:event)
+        endif
+
+        return
+    endif
+
     if !self.canBeFocused(itemIdxAtMousePos)
         call self.__renderHighlight(-1)
         call s:VMenuManager.setFocusedWindow(self)
@@ -362,15 +374,6 @@ function! s:VmenuWindow.__onMouseHover(event)
             call s:log("winId: " .. self.winId .. " hover at " .. itemIdxAtMousePos)
             call self.subVmenuWindow.handleEvent(s:RecursiveCloseEvent.new())
         endif
-    endif
-
-    " not in current window. pass it to parent window
-    if itemIdxAtMousePos == -1 && !empty(self.parentVmenuWindow)
-        call self.parentVmenuWindow.handleEvent(a:event)
-        return
-    endif
-    if itemIdxAtMousePos == -1
-        return
     endif
 
     " only execute once at same item
@@ -3610,6 +3613,45 @@ if 0
         call assert_equal([' ', ' ', ' ', '█', '█'], scrollbarWidow.dumpContent().textList)
         call scrollbarWidow.close()
         call assert_equal(0, scrollbarWidow.isOpen)
+    endif
+
+    " focused context menu should not highlight current item when the mouse is not hovering over any window
+    if 1
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \ #{name: '1', cmd: '', subItemList: [#{name: "1.1", cmd: ''}]},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.build()
+                    \.showAtCursor()
+        "call s:VMenuManager.startListening()
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<CR>"))
+        call s:VMenuManager.__focusedWindow.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow, 0, 1)))
+        call assert_equal([], s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList)
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+    endif
+
+    " when sub menu window is opening, parent menu window should keep current item highlighted even the mouse
+    " is not hovering over any window
+    if 1
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \ #{name: '1', cmd: '', subItemList: [#{name: "1.1", cmd: '', subItemList: [#{name: '1.1.1', cmd: ''}]}]},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.build()
+                    \.showAtCursor()
+        "call s:VMenuManager.startListening()
+        let rootWindow = s:VMenuManager.__focusedWindow
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<CR>"))
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<CR>"))
+        call s:VMenuManager.__focusedWindow.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow, 0, 1)))
+        call assert_equal([], s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList)
+        call s:VMenuManager.__focusedWindow.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow, 0, 1)))
+        call assert_equal([["VmenuSelect", 0, 8]], s:VMenuManager.__focusedWindow.parentVmenuWindow.getCurItem().syntaxRegionList)
+        call assert_equal([["VmenuSelect", 0, 6]], rootWindow.getCurItem().syntaxRegionList)
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
     endif
 
     call s:showErrors()
