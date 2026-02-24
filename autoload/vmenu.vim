@@ -349,6 +349,7 @@ endfunction
 
 function! s:VmenuWindow.__onMouseHover(event)
     let itemIdxAtMousePos = self.getItemIndexOnPos(a:event.mousepos)
+    call s:log(printf("winId: %s, itemIdxAtMousePos: %s", self.winId, itemIdxAtMousePos))
 
     if itemIdxAtMousePos == -1
         if empty(self.subVmenuWindow) || self.subVmenuWindow.isOpen == 0
@@ -357,6 +358,10 @@ function! s:VmenuWindow.__onMouseHover(event)
 
         if !empty(self.parentVmenuWindow)
             call self.parentVmenuWindow.handleEvent(a:event)
+        endif
+
+        if self.winId == s:VMenuManager.__focusedWindow.winId
+            let self.__curItemIndex = itemIdxAtMousePos
         endif
 
         return
@@ -382,6 +387,7 @@ function! s:VmenuWindow.__onMouseHover(event)
     endif
 
     if !self.canBeFocused(itemIdxAtMousePos)
+        let self.__curItemIndex = itemIdxAtMousePos
         return
     endif
 
@@ -393,6 +399,7 @@ function! s:VmenuWindow.__onMouseHover(event)
     call self.focusItemByIndex(itemIdxAtMousePos)
     let self.subVmenuWindow = self.__expand()
     redraw
+    let self.__curItemIndex = itemIdxAtMousePos
 endfunction
 
 function! s:VmenuWindow.__expand()
@@ -509,7 +516,11 @@ function! s:ContextWindow.new(contextWindowBuilder)
     return contextWindow
 endfunction
 function! s:ContextWindow.getCurItem()
-    return self.contextItemList[self.__curItemIndex]
+    if -1 == self.__curItemIndex
+        return s:ItemParser.parseVMenuItem(#{name:'', cmd:''})  " an empty item
+    else
+        return self.contextItemList[self.__curItemIndex]
+    endif
 endfunction
 
 " editorStatus: class EditorStautus
@@ -599,13 +610,13 @@ function! s:ContextWindow.showAtCursor()
 endfunction
 
 function! s:ContextWindow.getItemIndexOnPos(mousePos)
-    let clickedPos = #{x: a:mousePos.screencol, y: a:mousePos.screenrow}
+    let mousePos = #{x: a:mousePos.screencol, y: a:mousePos.screenrow}
     let topLeftCorner = s:VMenuManager.calcTopLeftPos(self)
-    call s:log("clickedPos:" .. string(clickedPos))
+    call s:log("mousePos:" .. string(mousePos))
     call s:log("topLeftCorner:" .. string(topLeftCorner))
-    if self.isInArea(clickedPos.x, clickedPos.y)
+    if self.isInArea(mousePos.x, mousePos.y)
         " plus self.renderStartIdx to correct index if scrollbar is activated
-        return clickedPos.y - topLeftCorner.y + self.renderStartIdx
+        return mousePos.y - topLeftCorner.y + self.renderStartIdx
     endif
 
     return -1
@@ -665,13 +676,13 @@ function! s:ContextWindow.canBeFocused(idx)
 endfunction
 
 function! s:ContextWindow.enter()
-    if !self.canBeFocused(self.__curItemIndex)
-        call self.__errConsumer("vmenu: current item is not executable!")
+    if -1 == self.__curItemIndex
+        call self.__errConsumer("vmenu: there is no focused item!")
         return
     endif
 
-    if -1 == self.__curItemIndex
-        call self.__errConsumer("vmenu: there is no focused item!")
+    if !self.canBeFocused(self.__curItemIndex)
+        call self.__errConsumer("vmenu: current item is not executable!")
         return
     endif
 
@@ -2443,7 +2454,7 @@ if 0
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<CR>"))
         call assert_equal(1, s:VMenuManager.__focusedWindow.isOpen == 1)    " keep opening
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
-        call assert_equal("vmenu: current item is not executable!", s:errorList[0])
+        call assert_equal("vmenu: there is no focused item!", s:errorList[0])
     endif
 
     " inactive context item should not be executed by hotkey
@@ -3146,7 +3157,7 @@ if 0
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
         call s:VMenuManager.__focusedWindow.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow, 0, 1)))
-        call assert_equal("0", s:VMenuManager.__focusedWindow.getCurItem().name->trim())
+        call assert_equal("————", s:VMenuManager.__focusedWindow.getCurItem().name->trim())
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
     endif
 
@@ -3161,11 +3172,10 @@ if 0
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
         call window.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(window, 0, 0)))
-        call assert_equal("0.1", s:VMenuManager.__focusedWindow.getCurItem().name->trim())
         call assert_equal(1, s:VMenuManager.__focusedWindow.contextItemList->len()) " focus sub window
         call assert_equal(-1, s:VMenuManager.__focusedWindow.__curItemIndex)
         call s:VMenuManager.__focusedWindow.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow, 0, 0)))
-        call assert_equal("0.1.1", s:VMenuManager.__focusedWindow.getCurItem().name->trim())
+        call assert_equal(-1, s:VMenuManager.__focusedWindow.__curItemIndex)
         call window.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(window, 0, 1)))
         call assert_equal("1", s:VMenuManager.__focusedWindow.getCurItem().name->trim())
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
@@ -3188,10 +3198,9 @@ if 0
                     \.show()
         "call s:VMenuManager.startListening()
         call window.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(window, 0, 0)))
-        call assert_equal("1.1", s:VMenuManager.__focusedWindow.getCurItem().name->trim())
         call assert_equal(-1, s:VMenuManager.__focusedWindow.__curItemIndex)
         call s:VMenuManager.__focusedWindow.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow, 0, 0)))
-        call assert_equal("1.1.1", s:VMenuManager.__focusedWindow.getCurItem().name->trim())
+        call assert_equal(-1, s:VMenuManager.__focusedWindow.__curItemIndex)
         call window.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(window, 5, 0)))
         call assert_equal("2", window.getCurItem().name->trim())
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
@@ -3228,7 +3237,7 @@ if 0
         call s:VMenuManager.__focusedWindow.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(window, 0, 0)))
         let winIdAtFirstTime = string(window.subVmenuWindow.winId)
         call s:log(winIdAtFirstTime)
-        call window.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(window, 0, 1)))
+        call window.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(window, 1, 0)))
         call window.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(window, 0, 0)))
         let winIdAtSecondTime = string(window.subVmenuWindow.winId)
         call s:log(winIdAtSecondTime)
@@ -3592,7 +3601,7 @@ if 0
         let mainWindow = s:VMenuManager.__focusedWindow.parentVmenuWindow
         call assert_equal(['VmenuSelect', 0, 6], mainWindow.getCurItem().syntaxRegionList[0])
         call s:VMenuManager.__focusedWindow.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(mainWindow, 0, 2)))
-        call assert_equal([], s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList)
+        call assert_equal(["VmenuInactive", 0, 6], s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList[0])
         call assert_equal(0, s:VMenuManager.__focusedWindow.docWindow.isOpen)
         call s:VMenuManager.__focusedWindow.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(mainWindow, 0, 1)))
         call s:VMenuManager.__focusedWindow.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(mainWindow, 0, 2)))
@@ -3651,6 +3660,28 @@ if 0
         call assert_equal([["VmenuSelect", 0, 6]], rootWindow.getCurItem().syntaxRegionList)
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+    endif
+
+    " if no item is highlighted, pressing "enter" should do nothing
+    if 1
+        let s:errorList = []
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \ #{name: '1', cmd: '', subItemList: [#{name: "1.1", cmd: ''}]},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.errConsumer({ msg -> add(s:errorList, msg) })
+                    \.build()
+                    \.showAtCursor()
+        "call s:VMenuManager.startListening()
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<CR>"))
+        call s:VMenuManager.__focusedWindow.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow, 0, 1)))
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<CR>"))
+        call assert_equal("vmenu: there is no focused item!", s:errorList[0])
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+        call s:VMenuManager.__focusedWindow.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow, -1, 0)))
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<CR>"))
+        call assert_equal("vmenu: there is no focused item!", s:errorList[0])
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
     endif
 
