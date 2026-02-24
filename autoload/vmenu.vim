@@ -239,8 +239,12 @@ function! s:VmenuWindow.focusNext()
     call self.__focusFirstMatch(searchSeq)
 endfunction
 function! s:VmenuWindow.focusPrev()
-    let reverseSeq = reverse(range(self.__curItemIndex))
-    call self.__focusFirstMatch(reverseSeq)
+    if -1 == self.__curItemIndex
+        call self.focusBottom()
+    else
+        let reverseSeq = reverse(range(self.__curItemIndex))
+        call self.__focusFirstMatch(reverseSeq)
+    endif
 endfunction
 function! s:VmenuWindow.__focusFirstMatch(searchSeq)
     let i = indexof(a:searchSeq, {i, v -> self.canBeFocused(v)})
@@ -3682,6 +3686,22 @@ if 0
         call s:VMenuManager.__focusedWindow.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow, -1, 0)))
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<CR>"))
         call assert_equal("vmenu: there is no focused item!", s:errorList[0])
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+    endif
+
+    " if no item is highlighted, "focusPrev" should move to the bottom
+    if 1
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \ #{name: '1', cmd: ''},
+                    \ #{name: '2', cmd: ''},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.build()
+                    \.showAtCursor()
+        "call s:VMenuManager.startListening()
+        call s:VMenuManager.__focusedWindow.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow, -1, 0)))
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("k"))
+        call assert_equal("2", s:VMenuManager.__focusedWindow.getCurItem().name->trim())
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
     endif
 
