@@ -744,7 +744,6 @@ function! s:ContextWindow.__executeCmdField(fieldName="cmd")
     let curItem = self.contextItemList[self.__curItemIndex]
     let CmdField = curItem[a:fieldName]
     call s:executeCmd(CmdField, curItem, self.__editorStatusSupplier())
-    call s:log(printf("winId: %s, execute cmd: %s", self.winId, CmdField))
 endfunction
 function! s:ContextWindow.__renderText(start, end)
     return reduce(self.contextItemList[a:start:a:end], { acc, val -> add(acc, val.name) }, [])
@@ -1877,17 +1876,24 @@ function! s:executeCmd(Cmd, item, editorStatus)
     if type(a:Cmd) == v:t_string
         if strwidth(a:Cmd) > 0
             call execute(a:Cmd)
+            call s:log(printf("execute cmd: %s", a:Cmd))
         endif
     endif
 
     if type(a:Cmd) == v:t_func
-        call a:Cmd(s:createCallbackItemParm(a:item), a:editorStatus)
+        let callbackItemParam = s:createCallbackItemParm(a:item)
+        call a:Cmd(callbackItemParam, a:editorStatus)
+        call s:log(printf("execute func: %s, callbackItemParam: %s, editorStatus: %s",
+                    \ a:Cmd, callbackItemParam, a:editorStatus))
     endif
 endfunction
 
 function! s:event2String(event)
     let workingEvent = deepcopy(a:event, 1)
     let workingEvent.key = keytrans(workingEvent.key)   " convert to a readable format
+    if has_key(workingEvent, "new")
+        call remove(workingEvent, "new")
+    endif
     return string(workingEvent)
 endfunction
 
