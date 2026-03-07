@@ -759,8 +759,13 @@ function! s:ContextWindow.__renderHighlight(offset)
         let self.renderEndIdx = a:offset
     endif
     if a:offset < self.renderStartIdx
-        let self.renderStartIdx = max([0, a:offset])
-        let self.renderEndIdx = max([0, a:offset]) + self.winHeight - 1
+        if a:offset == -1 && self.renderStartIdx != 0
+            " the mouse is not on any item and the scrollbar is active
+            " keep self.renderStartIdx and self.renderEndIdx unchanged
+        else
+            let self.renderStartIdx = max([0, a:offset])
+            let self.renderEndIdx = max([0, a:offset]) + self.winHeight - 1
+        endif
     endif
 
     let needActivateScrollbar = self.winHeight < self.contextItemList->len()
@@ -846,6 +851,10 @@ function! s:ContextWindow.__openDocWindowIfAvaliable()
         call docWindow.showAt(x, y)
         let self.docWindow = docWindow
     endif
+endfunction
+
+function! s:ContextWindow.dumpContent()
+    return #{textList: self.quickuiWindow.text, highlight: []}
 endfunction
 
 
@@ -3708,6 +3717,25 @@ if 0
         call s:VMenuManager.__focusedWindow.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow, -1, 0)))
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("k"))
         call assert_equal("2", s:VMenuManager.__focusedWindow.getCurItem().name->trim())
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+    endif
+
+    " when the scrollbar reaches the bottom, moving the mouse outside the context menu should not cause the menu content to change.
+    if 1
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \ #{name: '1', cmd: ''},
+                    \ #{name: '2', cmd: ''},
+                    \ #{name: '3', cmd: ''},
+                    \ #{name: '4', cmd: ''},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.winHeight(2)
+                    \.build()
+                    \.showAtCursor()
+        "call s:VMenuManager.startListening()
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("G"))
+        call s:VMenuManager.__focusedWindow.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow, -1, 0)))
+        call assert_equal(["   3  ", "   4  "], s:VMenuManager.__focusedWindow.dumpContent().textList)
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
     endif
 
