@@ -41,6 +41,11 @@ let s:doc_window_scroll_down_key = get(g:, "vmenu_doc_window_scroll_down_key", "
 let s:doc_window_scroll_up_key = get(g:, "vmenu_doc_window_scroll_up_key", "\<C-Y>")
 let s:enable_markdown_syntax_in_doc_window = get(g:, "vmenu_enable_markdown_syntax_in_doc_window", 0)
 
+function! s:echom(msg)
+    echom a:msg
+endfunction
+let s:appender = function("s:echom")
+
 "-------------------------------------------------------------------------------
 " class HotKey
 "-------------------------------------------------------------------------------
@@ -1855,15 +1860,10 @@ function! s:printWarn(msg)
     call s:log(a:msg, "WARN")
 endfunction
 
-function! s:log(msg, level="INFO")
+function! s:log(msg, level="INFO", appender=s:appender)
     if s:enable_log == 1
-        call s:echom(printf("%s [%s] %s", strftime("%T"), a:level, a:msg))
+        call a:appender(printf("%s [%s] %s", strftime("%T"), a:level, a:msg))
     endif
-endfunction
-
-function! s:echom(msg)
-    echom a:msg
-    "call writefile([a:msg], "vmenu.log", "a")
 endfunction
 
 function! s:existFileType(ft)
