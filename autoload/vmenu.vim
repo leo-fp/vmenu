@@ -40,11 +40,13 @@ let s:min_context_menu_width = get(g:, "vmenu_min_context_menu_width", 0)
 let s:doc_window_scroll_down_key = get(g:, "vmenu_doc_window_scroll_down_key", "\<C-E>")
 let s:doc_window_scroll_up_key = get(g:, "vmenu_doc_window_scroll_up_key", "\<C-Y>")
 let s:enable_markdown_syntax_in_doc_window = get(g:, "vmenu_enable_markdown_syntax_in_doc_window", 0)
+let s:enable_left_border = get(g:, "vmenu_enable_left_border", 0)
 
 function! s:echom(msg)
     echom a:msg
 endfunction
 let s:appender = function("s:echom")
+let s:leftBorderChar = "▌"
 
 "-------------------------------------------------------------------------------
 " class HotKey
@@ -140,6 +142,8 @@ hi! VmenuBg guifg=#BEC0C6 guibg=#2B2D30
 hi! VmenuSelect guibg=#2E436E guifg=#BCBCAC
 hi! VmenuDesc guifg=#465967
 hi! VmenuSepLine guifg=#393B3F
+hi! VmenuLeftBorder guifg=#323232
+hi! VmenuLeftBorderSelect guibg=#2E436E guifg=#2E436E
 hi! VmenuInactive guifg=#4D5360
 hi! VmenuHotkey1 gui=underline guifg=#BEC0C6
 hi! VmenuSelectedHotkey gui=underline guibg=#2E436E guifg=#BEC0C6
@@ -451,10 +455,15 @@ function! s:ContextWindowBuilder.new()
     let contextWindowBuilder.__closeKey = "\<ESC>"
     let contextWindowBuilder.__confirmKey = "\<CR>"
     let contextWindowBuilder.__goBottomKey = 'G'
+    let contextWindowBuilder.__enableLeftBorder = s:enable_left_border
     return contextWindowBuilder
 endfunction
 function! s:ContextWindowBuilder.contextItemList(contextItemList)
     let self.__contextItemList = a:contextItemList
+    return self
+endfunction
+function! s:ContextWindowBuilder.enableLeftBorder()
+    let self.__enableLeftBorder = 1
     return self
 endfunction
 function! s:ContextWindowBuilder.build()
@@ -478,9 +487,9 @@ function! s:ContextWindow.new(contextWindowBuilder)
     let contextWindow.contextItemList = s:ItemParser.__concatenateShortKey(contextWindow.contextItemList)
     let contextWindow.contextItemList = s:ItemParser.__fillNameToSameLength(contextWindow.contextItemList)
     let contextWindow.contextItemList = s:ItemParser.__addIcon(contextWindow.contextItemList)
-    let contextWindow.contextItemList = s:ItemParser.__addPaddingInContextMenu(contextWindow.contextItemList)
+    let contextWindow.contextItemList = s:ItemParser.__addPaddingInContextMenu(contextWindow.contextItemList, a:contextWindowBuilder.__enableLeftBorder ? s:leftBorderChar : ' ')
     let contextWindow.contextItemList = s:ItemParser.__stretchingIfNeed(contextWindow.contextItemList, a:contextWindowBuilder.__minWidth)
-    let contextWindow.contextItemList = s:ItemParser.__renderSeparatorLine(contextWindow.contextItemList)
+    let contextWindow.contextItemList = s:ItemParser.__renderSeparatorLine(contextWindow.contextItemList, a:contextWindowBuilder.__enableLeftBorder ? s:leftBorderChar : ' ')
     let contextWindow.quickuiWindow = quickui#window#new()
     let contextWindow.winId = rand(srand())
     let contextWindow.hotKeyList = []
@@ -501,6 +510,7 @@ function! s:ContextWindow.new(contextWindowBuilder)
     let contextWindow.__curItemIndex = -1
     let contextWindow.__errConsumer = a:contextWindowBuilder.__errConsumer
     let contextWindow.__editorStatusSupplier = a:contextWindowBuilder.__editorStatusSupplier
+    let contextWindow.__enableLeftBorder = a:contextWindowBuilder.__enableLeftBorder
     let contextWindow.isOpen = 0
     let contextWindow.parentVmenuWindow = a:contextWindowBuilder.__parentContextWindow
     let contextWindow.docWindow = {}
@@ -781,10 +791,14 @@ function! s:ContextWindow.__renderHighlight(offset)
 
         " inactive item
         if curItem.isInactive(self.__editorStatusSupplier()) == 1
+            if self.__enableLeftBorder
+                call add(curItem.syntaxRegionList, ["VmenuLeftBorder", 0, 1])
+            endif
+
             if curItem.hotKeyPos == -1
-                call add(curItem.syntaxRegionList, ["VmenuInactive", 0, endColumnNr])
+                call add(curItem.syntaxRegionList, ["VmenuInactive", self.__enableLeftBorder ? 1 : 0, endColumnNr])
             else
-                call add(curItem.syntaxRegionList, ["VmenuInactive", 0, curItem.hotKeyPos])
+                call add(curItem.syntaxRegionList, ["VmenuInactive", self.__enableLeftBorder ? 1 : 0, curItem.hotKeyPos])
                 call add(curItem.syntaxRegionList, ["VmenuInactiveHotKey", curItem.hotKeyPos, curItem.hotKeyPos+1])
                 call add(curItem.syntaxRegionList, ["VmenuInactive", curItem.hotKeyPos+1, endColumnNr])
             endif
@@ -794,10 +808,14 @@ function! s:ContextWindow.__renderHighlight(offset)
 
         " focused item
         if index == a:offset
+            if self.__enableLeftBorder
+                call add(curItem.syntaxRegionList, ["VmenuLeftBorderSelect", 0, 1])
+            endif
+
             if curItem.hotKeyPos == -1
-                call add(curItem.syntaxRegionList, ["VmenuSelect", 0, endColumnNr])
+                call add(curItem.syntaxRegionList, ["VmenuSelect", self.__enableLeftBorder ? 1 : 0, endColumnNr])
             else
-                call add(curItem.syntaxRegionList, ["VmenuSelect", 0, curItem.hotKeyPos])
+                call add(curItem.syntaxRegionList, ["VmenuSelect", self.__enableLeftBorder ? 1 : 0, curItem.hotKeyPos])
                 call add(curItem.syntaxRegionList, ["VmenuSelectedHotkey", curItem.hotKeyPos, curItem.hotKeyPos+1])
                 call add(curItem.syntaxRegionList, ["VmenuSelect", curItem.hotKeyPos+1, endColumnNr])
             endif
@@ -812,12 +830,16 @@ function! s:ContextWindow.__renderHighlight(offset)
 
         " seperator line
         if curItem.isSep == 1
-            call add(curItem.syntaxRegionList, ["VmenuSepLine", 0, endColumnNr])
+            call add(curItem.syntaxRegionList, ["VmenuSepLine", 1, endColumnNr])
         endif
 
         " desc
         if curItem.descPos != -1
             call add(curItem.syntaxRegionList, ["VmenuDesc", curItem.descPos, curItem.descPos + curItem.descWidth])
+        endif
+
+        if self.__enableLeftBorder
+            call add(curItem.syntaxRegionList, ["VmenuLeftBorder", 0, 1])
         endif
 
     endfor
@@ -1613,10 +1635,10 @@ function! s:ItemParser.__concatenateShortKey(contextItemList)
     endfor
     return workingContextItemList
 endfunction
-function! s:ItemParser.__addPaddingInContextMenu(contextItemList)
+function! s:ItemParser.__addPaddingInContextMenu(contextItemList, leftBorderChar)
     let workingContextItemList = deepcopy(a:contextItemList, 1)
     for contextItem in workingContextItemList
-        let paddingLeft = '  '
+        let paddingLeft = a:leftBorderChar .. ' '
         let contextItem.name = paddingLeft .. contextItem.name .. '  '
         let contextItem.descPos = strwidth(contextItem.shortKey) > 0 ?
                     \ contextItem.descPos + strwidth(paddingLeft) : -1 " adjust desc pos
@@ -1660,7 +1682,7 @@ function! s:ItemParser.__stretchingIfNeed(contextItemList, minWidth)
     endfor
     return workingContextItemList
 endfunction
-function! s:ItemParser.__renderSeparatorLine(contextItemList)
+function! s:ItemParser.__renderSeparatorLine(contextItemList, leftBorderChar)
     let workingContextItemList = deepcopy(a:contextItemList, 1)
     if a:contextItemList->empty()
         return workingContextItemList
@@ -1669,7 +1691,7 @@ function! s:ItemParser.__renderSeparatorLine(contextItemList)
     let width = strwidth(a:contextItemList[0].name)
     for contextItem in workingContextItemList
         if (contextItem.isSep == 1)
-            let contextItem.name = ' ' .. repeat('—', max([1, width-2])) .. ' '
+            let contextItem.name = a:leftBorderChar .. repeat('—', max([1, width-2])) .. ' '
         endif
     endfor
     return workingContextItemList
@@ -1966,6 +1988,7 @@ if 0
     let s:min_context_menu_width = 0
     let s:doc_window_scroll_down_key = "\<C-E>"
     let s:doc_window_scroll_up_key = "\<C-Y>"
+    let s:enable_left_border = 0
 
     " vmenu item parse test
     if 0
@@ -3736,6 +3759,25 @@ if 0
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("G"))
         call s:VMenuManager.__focusedWindow.handleEvent(s:MouseHoverEvent.new(s:createMousePosFromTopLeft(s:VMenuManager.__focusedWindow, -1, 0)))
         call assert_equal(["   3  ", "   4  "], s:VMenuManager.__focusedWindow.dumpContent().textList)
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+    endif
+
+    " left border test
+    if 1
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \ #{name: '1', cmd: ''},
+                    \ #{isSep:1},
+                    \ #{name: '2', cmd: '', deactive-if: { -> 1 }},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.enableLeftBorder()
+                    \.build()
+                    \.showAtCursor()
+        "call s:VMenuManager.startListening()
+        call assert_equal(["▌  1  ", "▌———— ", "▌  2  "], s:VMenuManager.__focusedWindow.dumpContent().textList)
+        call assert_true([] != filter(copy(s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList), {idx, val -> val == ['VmenuLeftBorderSelect', 0, 1]}))
+        call assert_true([] != filter(copy(s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList), {idx, val -> val == ['VmenuSelect', 1, 6]}))
+        call assert_true([] != filter(copy(s:VMenuManager.__focusedWindow.contextItemList[2].syntaxRegionList), {idx, val -> val == ['VmenuLeftBorder', 0, 1]}))
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
     endif
 
