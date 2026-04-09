@@ -45,7 +45,7 @@ let s:enable_left_border = get(g:, "vmenu_enable_left_border", 0)
 function! s:echom(msg)
     echom a:msg
 endfunction
-let s:appender = function("s:echom")
+let s:logAppender = function("s:echom")
 let s:leftBorderChar = "▌"
 
 "-------------------------------------------------------------------------------
@@ -1312,10 +1312,10 @@ function! s:ScrollbarWindow.showAt(x, y)
     redraw
     return self
 endfunction
-function! s:ScrollbarWindow.__calcRenderContent(scrolled)
+function! s:ScrollbarWindow.__calcRenderContent(scrolledCnt)
     let textList = mapnew(range(self.winHeight), '" "')
     let highlight = []
-    let scrollbarOffset = (self.winHeight - self.thumbHeight) * a:scrolled / (self.total - self.winHeight)
+    let scrollbarOffset = (self.winHeight - self.thumbHeight) * a:scrolledCnt / (self.total - self.winHeight)
     for i in range(self.thumbHeight)
         let textList[scrollbarOffset+i] = '█'
         call add(highlight, #{highlight: self.thumbColor, x1: 0, y1: scrollbarOffset+i, x2: 1, y2: scrollbarOffset+i})
@@ -1882,7 +1882,7 @@ function! s:printWarn(msg)
     call s:log(a:msg, "WARN")
 endfunction
 
-function! s:log(msg, level="INFO", appender=s:appender)
+function! s:log(msg, level="INFO", appender=s:logAppender)
     if s:enable_log == 1
         call a:appender(printf("%s [%s] %s", strftime("%T"), a:level, a:msg))
     endif
