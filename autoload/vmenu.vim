@@ -145,7 +145,7 @@ hi! VmenuDesc guifg=#465967
 hi! VmenuSepLine guifg=#393B3F
 hi! VmenuGroupName guifg=#5d5e60
 hi! VmenuLeftBorder guifg=#323232
-hi! VmenuLeftBorderSelect guibg=#2E436E guifg=#2E436E
+hi! VmenuLeftBorderSelect guibg=#2E436E guifg=#323232
 hi! VmenuInactive guifg=#4D5360
 hi! VmenuHotkey1 gui=underline guifg=#BEC0C6
 hi! VmenuSelectedHotkey gui=underline guibg=#2E436E guifg=#BEC0C6
