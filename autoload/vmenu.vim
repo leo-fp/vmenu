@@ -41,6 +41,7 @@ let s:doc_window_scroll_down_key = get(g:, "vmenu_doc_window_scroll_down_key", "
 let s:doc_window_scroll_up_key = get(g:, "vmenu_doc_window_scroll_up_key", "\<C-Y>")
 let s:enable_markdown_syntax_in_doc_window = get(g:, "vmenu_enable_markdown_syntax_in_doc_window", 0)
 let s:enable_left_border = get(g:, "vmenu_enable_left_border", 0)
+let s:display_group_name = get(g:, "vmenu_display_group_name", 0)
 
 function! s:echom(msg)
     echom a:msg
@@ -142,6 +143,7 @@ hi! VmenuBg guifg=#BEC0C6 guibg=#2B2D30
 hi! VmenuSelect guibg=#2E436E guifg=#BCBCAC
 hi! VmenuDesc guifg=#465967
 hi! VmenuSepLine guifg=#393B3F
+hi! VmenuGroupName guifg=#5d5e60
 hi! VmenuLeftBorder guifg=#323232
 hi! VmenuLeftBorderSelect guibg=#2E436E guifg=#2E436E
 hi! VmenuInactive guifg=#4D5360
@@ -456,6 +458,7 @@ function! s:ContextWindowBuilder.new()
     let contextWindowBuilder.__confirmKey = "\<CR>"
     let contextWindowBuilder.__goBottomKey = 'G'
     let contextWindowBuilder.__enableLeftBorder = s:enable_left_border
+    let contextWindowBuilder.__displayGroupName = s:display_group_name
     return contextWindowBuilder
 endfunction
 function! s:ContextWindowBuilder.contextItemList(contextItemList)
@@ -464,6 +467,10 @@ function! s:ContextWindowBuilder.contextItemList(contextItemList)
 endfunction
 function! s:ContextWindowBuilder.enableLeftBorder()
     let self.__enableLeftBorder = 1
+    return self
+endfunction
+function! s:ContextWindowBuilder.displayGroupName()
+    let self.__displayGroupName = 1
     return self
 endfunction
 function! s:ContextWindowBuilder.build()
@@ -489,7 +496,7 @@ function! s:ContextWindow.new(contextWindowBuilder)
     let contextWindow.contextItemList = s:ItemParser.__addIcon(contextWindow.contextItemList)
     let contextWindow.contextItemList = s:ItemParser.__addPaddingInContextMenu(contextWindow.contextItemList, a:contextWindowBuilder.__enableLeftBorder ? s:leftBorderChar : ' ')
     let contextWindow.contextItemList = s:ItemParser.__stretchingIfNeed(contextWindow.contextItemList, a:contextWindowBuilder.__minWidth)
-    let contextWindow.contextItemList = s:ItemParser.__renderSeparatorLine(contextWindow.contextItemList, a:contextWindowBuilder.__enableLeftBorder ? s:leftBorderChar : ' ')
+    let contextWindow.contextItemList = s:ItemParser.__renderSeparatorLine(contextWindow.contextItemList, a:contextWindowBuilder.__enableLeftBorder ? s:leftBorderChar : ' ', a:contextWindowBuilder.__displayGroupName)
     let contextWindow.quickuiWindow = quickui#window#new()
     let contextWindow.winId = rand(srand())
     let contextWindow.hotKeyList = []
@@ -511,6 +518,7 @@ function! s:ContextWindow.new(contextWindowBuilder)
     let contextWindow.__errConsumer = a:contextWindowBuilder.__errConsumer
     let contextWindow.__editorStatusSupplier = a:contextWindowBuilder.__editorStatusSupplier
     let contextWindow.__enableLeftBorder = a:contextWindowBuilder.__enableLeftBorder
+    let contextWindow.__displayGroupName = a:contextWindowBuilder.__displayGroupName
     let contextWindow.isOpen = 0
     let contextWindow.parentVmenuWindow = a:contextWindowBuilder.__parentContextWindow
     let contextWindow.docWindow = {}
@@ -830,7 +838,12 @@ function! s:ContextWindow.__renderHighlight(offset)
 
         " seperator line
         if curItem.isSep == 1
-            call add(curItem.syntaxRegionList, ["VmenuSepLine", 1, endColumnNr])
+            if curItem.suppressGroupName || self.__displayGroupName == 0
+                call add(curItem.syntaxRegionList, ["VmenuSepLine", 1, endColumnNr])
+            else
+                call add(curItem.syntaxRegionList, ["VmenuSepLine", 1 + strwidth(curItem.group), endColumnNr])
+                call add(curItem.syntaxRegionList, ["VmenuGroupName", 1, 1 + strwidth(curItem.group)])
+            endif
         endif
 
         " desc
@@ -906,6 +919,9 @@ function! s:ContextItem.new(dict)
     let contextItem.isInactive = get(a:dict, 'isInactive')           " EditorStatus class -> 0/1
     let contextItem.subItemList     = get(a:dict, 'subItemList', []) " ContextItem list
     let contextItem.isSep           = get(a:dict, 'isSep', 0)        " is seperator line. 0: false, 1: true
+
+    " suppress displaying group name in the separator line. 0: false, 1: true. only used in the separator line item.
+    let contextItem.suppressGroupName = get(a:dict, 'suppressGroupName', 0)
     let contextItem.descPos         = get(a:dict, 'descPos', -1)     " offset of shortKey
     let contextItem.descWidth       = get(a:dict, 'descWidth', 0)    " length of shortKey
     let contextItem.stretchingIndex = strwidth(contextItem.name)   " the index for stretching (contextItem.name[stretchingIndex-1] is the last char of item name). used for minWidth
@@ -1502,6 +1518,7 @@ function! s:ItemParser.parseVMenuItem(userItem)
     let hotKeyPos = get(quickuiItem, 'key_pos', '')
     let hotKey    = get(quickuiItem, 'key_char', '')
     let isSep     = get(a:userItem, 'isSep', '')
+    let suppressGroupName     = get(a:userItem, 'suppressGroupName', 0)
     let Cmd       = get(a:userItem, 'cmd', '')
     let OnFocus   = get(a:userItem, 'onFocus', '')
     let tip       = get(a:userItem, 'tip', '')
@@ -1552,6 +1569,7 @@ function! s:ItemParser.parseVMenuItem(userItem)
                 \isInactive: DeactivePredicate,
                 \subItemList: subItemList,
                 \isSep: isSep,
+                \suppressGroupName: suppressGroupName,
                 \itemVersion: g:VMENU#ITEM_VERSION.VMENU,
                 \descPos: descPos,
                 \descWidth: descWidth,
@@ -1682,7 +1700,7 @@ function! s:ItemParser.__stretchingIfNeed(contextItemList, minWidth)
     endfor
     return workingContextItemList
 endfunction
-function! s:ItemParser.__renderSeparatorLine(contextItemList, leftBorderChar)
+function! s:ItemParser.__renderSeparatorLine(contextItemList, leftBorderChar, displayGroupName)
     let workingContextItemList = deepcopy(a:contextItemList, 1)
     if a:contextItemList->empty()
         return workingContextItemList
@@ -1691,7 +1709,10 @@ function! s:ItemParser.__renderSeparatorLine(contextItemList, leftBorderChar)
     let width = strwidth(a:contextItemList[0].name)
     for contextItem in workingContextItemList
         if (contextItem.isSep == 1)
-            let contextItem.name = a:leftBorderChar .. repeat('—', max([1, width-2])) .. ' '
+            let groupName = (contextItem.suppressGroupName == 0 && a:displayGroupName) ? contextItem.group : ""
+            let contextItem.name = a:leftBorderChar
+                        \ .. groupName
+                        \ .. repeat('—', max([1, width-strwidth(groupName)-2])) .. ' '
         endif
     endfor
     return workingContextItemList
@@ -1729,19 +1750,36 @@ function! s:ItemParser.__addSurroundedSeparatorLine(contextItemList)
     let workingContextItemList = []
     for idx in range(sortedItemList->len())
         if (sortedItemList[idx].group != '')
-            if idx == 0 || sortedItemList[idx-1].isSep == 1
-                        \ || sortedItemList[idx-1].group == sortedItemList[idx].group
-                        \ || workingContextItemList[workingContextItemList->len()-1].isSep == 1
+            "
+            " head separator line
+            "
+            if len(workingContextItemList) > 0 && workingContextItemList[-1].isSep == 1
+                " a separator line is inserted at the bottom of the workingContextItemList.
+                " remove that separator line because the group of current item has higher priority
+                " in the head separator line.
+                " a new one will be inserted later.
+                call remove(workingContextItemList, -1)
+            endif
+            if idx == 0 || (sortedItemList[idx-1].isSep == 1 && sortedItemList[idx-1].group == sortedItemList[idx].group)
+                        \ || (sortedItemList[idx-1].group == sortedItemList[idx].group)
+                        \ || sortedItemList[idx].isSep == 1
             else
-                call add(workingContextItemList, self.parseVMenuItem(#{isSep: 1}))
+                call add(workingContextItemList, self.parseVMenuItem(#{isSep: 1, group: sortedItemList[idx].group}))
             endif
 
             call add(workingContextItemList, deepcopy(sortedItemList[idx], 1))
 
+            "
+            " tail separator line
+            "
             if idx == sortedItemList->len()-1 || sortedItemList[idx+1].isSep == 1
                         \ || sortedItemList[idx+1].group == sortedItemList[idx].group
+                        \ || sortedItemList[idx].isSep == 1
             else
-                call add(workingContextItemList, self.parseVMenuItem(#{isSep: 1}))
+                " this separator line should not display any group name
+                call add(workingContextItemList, self.parseVMenuItem(
+                            \#{isSep: 1, group: sortedItemList[idx].group, suppressGroupName: 1}
+                            \))
             endif
         else
             call add(workingContextItemList, deepcopy(sortedItemList[idx], 1))
@@ -1961,6 +1999,7 @@ function! s:showErrors()
     let opts.h = 10
     let opts.title = ' errors '
     let opts.padding = [0, 1, 0, 1]
+    let opts.wrap = 1
     let text = []
     for err in v:errors
         call add(text, string(err))
@@ -1989,6 +2028,7 @@ if 0
     let s:doc_window_scroll_down_key = "\<C-E>"
     let s:doc_window_scroll_up_key = "\<C-Y>"
     let s:enable_left_border = 0
+    let s:display_group_name = 0
 
     " vmenu item parse test
     if 0
@@ -2894,6 +2934,54 @@ if 0
         call assert_equal("4", s:VMenuManager.__focusedWindow.contextItemList[3].name->trim())
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
     endif
+
+    " test the group name in the separator line
+    if 1
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \ #{name: '1', cmd: '', group: "group1"},
+                    \ #{isSep:1, group: "group2"},
+                    \ #{name: '3', cmd: '', group: "group3"},
+                    \ #{name: '4', cmd: ''},
+                    \ #{name: '5', cmd: '', group: "group5" },
+                    \ #{name: '6', cmd: '', group: "group6"},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.displayGroupName()
+                    \.build()
+                    \.showAtCursor()
+        "call s:VMenuManager.startListening()
+        call assert_equal([
+                    \"   1  ",
+                    \" group3— ",
+                    \"   3  ",
+                    \" ———— ",
+                    \"   4  ",
+                    \" group5— ",
+                    \"   5  ",
+                    \" group6— ",
+                    \"   6  "], s:VMenuManager.__focusedWindow.dumpContent().textList)
+        call assert_true([] != filter(copy(s:VMenuManager.__focusedWindow.contextItemList[1].syntaxRegionList), {idx, val -> val == ['VmenuGroupName', 1, 7]}))
+        call assert_true([] == filter(copy(s:VMenuManager.__focusedWindow.contextItemList[3].syntaxRegionList), {idx, val -> val[0] == 'VmenuGroupName'}))
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+    endif
+
+    " test the group name in the separator line if "displayGroupName" is 0
+    if 1
+        call s:ContextWindow.builder()
+                    \.contextItemList(s:VMenuManager.parseContextItem([
+                    \ #{name: '1', cmd: '', group: "group1"},
+                    \ #{name: '2', cmd: ''},
+                    \ #{isSep:1, group: "group2"},
+                    \ #{name: '3', cmd: ''},
+                    \], g:VMENU#ITEM_VERSION.VMENU))
+                    \.build()
+                    \.showAtCursor()
+        "call s:VMenuManager.startListening()
+        call assert_true([] == filter(copy(s:VMenuManager.__focusedWindow.contextItemList[1].syntaxRegionList), {idx, val -> val[0] == 'VmenuGroupName'}))
+        call assert_true([] == filter(copy(s:VMenuManager.__focusedWindow.contextItemList[3].syntaxRegionList), {idx, val -> val[0] == 'VmenuGroupName'}))
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+    endif
+
 
     " cmd can be funcref
     if 1

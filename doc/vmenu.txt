@@ -41,6 +41,7 @@ Version:	0.3.0
     6.6 g:vmenu_doc_window_scroll_up_key.......|vmenu_doc_window_scroll_up_key|
     6.7 g:vmenu_enable_markdown_syntax_in_doc_window..|vmenu_enable_markdown_syntax_in_doc_window|
     6.8 g:vmenu_enable_left_border...................|vmenu_enable_left_border|
+    6.9 g:vmenu_display_group_name...................|vmenu_display_group_name|
 7. vmenu Changelog............................................|vmenu-changelog|
 
 ==============================================================================
@@ -449,6 +450,19 @@ Enable left border in context menu window. default is 0.
 Effective for both context menu and dropdown menu of top menu.
 >
     let g:vmenu_enable_left_border = 1
+
+
+6.9 vmenu_display_group_name                          *vmenu_display_group_name*
+----------------------------------------
+Display group name in the separator line. default is 0.
+the group name is the value of "group" field in the vmenu item.
+Effective for both context menu and dropdown menu of top menu.
+>
+    let g:vmenu_display_group_name = 1
+
+how to set the group name in the user defined separator line?
+>
+    #{isSep:1, group: "group2"},
 
 ==============================================================================
 7. vmenu Changelog					                           *vmenu-changelog*
