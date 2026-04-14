@@ -489,7 +489,7 @@ function! s:ContextWindow.new(contextWindowBuilder)
     let contextWindow = s:VmenuWindow.new()
     call extend(contextWindow, deepcopy(s:ContextWindow, 1), "force")
     let contextWindow.contextItemList = s:filterVisibleItems(a:contextWindowBuilder.__contextItemList, a:contextWindowBuilder.__editorStatusSupplier())
-    let contextWindow.contextItemList = s:ItemParser.__addSurroundedSeparatorLine(contextWindow.contextItemList)
+    let contextWindow.contextItemList = s:ItemParser.__addSurroundedSeparatorLine(contextWindow.contextItemList, a:contextWindowBuilder.__displayGroupName)
     let contextWindow.contextItemList = s:ItemParser.__fillNameToSameLength(contextWindow.contextItemList)
     let contextWindow.contextItemList = s:ItemParser.__concatenateShortKey(contextWindow.contextItemList)
     let contextWindow.contextItemList = s:ItemParser.__fillNameToSameLength(contextWindow.contextItemList)
@@ -1717,7 +1717,7 @@ function! s:ItemParser.__renderSeparatorLine(contextItemList, leftBorderChar, di
     endfor
     return workingContextItemList
 endfunction
-function! s:ItemParser.__addSurroundedSeparatorLine(contextItemList)
+function! s:ItemParser.__addSurroundedSeparatorLine(contextItemList, displayGroupName)
     " place items with same group next to each other
     let sortedItemList = []
     let groupSet = []
@@ -1760,7 +1760,10 @@ function! s:ItemParser.__addSurroundedSeparatorLine(contextItemList)
                 " a new one will be inserted later.
                 call remove(workingContextItemList, -1)
             endif
-            if idx == 0 || (sortedItemList[idx-1].isSep == 1 && sortedItemList[idx-1].group == sortedItemList[idx].group)
+            " if the displayGroupName is 1, the head separator line of the first item should be
+            " retained
+            if (idx == 0 && !a:displayGroupName)
+                        \ || (sortedItemList[idx-1].isSep == 1 && sortedItemList[idx-1].group == sortedItemList[idx].group)
                         \ || (sortedItemList[idx-1].group == sortedItemList[idx].group)
                         \ || sortedItemList[idx].isSep == 1
             else
@@ -2951,6 +2954,7 @@ if 0
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
         call assert_equal([
+                    \" group1— ",
                     \"   1  ",
                     \" group3— ",
                     \"   3  ",
@@ -2960,7 +2964,7 @@ if 0
                     \"   5  ",
                     \" group6— ",
                     \"   6  "], s:VMenuManager.__focusedWindow.dumpContent().textList)
-        call assert_true([] != filter(copy(s:VMenuManager.__focusedWindow.contextItemList[1].syntaxRegionList), {idx, val -> val == ['VmenuGroupName', 1, 7]}))
+        call assert_true([] != filter(copy(s:VMenuManager.__focusedWindow.contextItemList[2].syntaxRegionList), {idx, val -> val == ['VmenuGroupName', 1, 7]}))
         call assert_true([] == filter(copy(s:VMenuManager.__focusedWindow.contextItemList[3].syntaxRegionList), {idx, val -> val[0] == 'VmenuGroupName'}))
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
     endif
