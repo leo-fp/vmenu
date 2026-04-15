@@ -16,6 +16,7 @@ just have some ideas want to try, start over seems easier and tempting
 * easy to hack
 * not slow
 * feature rich
+* keyboard-centric
 
 ### 0.2.0
 * menu and context menu already exist in my config should work as well
@@ -44,6 +45,10 @@ just have some ideas want to try, start over seems easier and tempting
 - [ ] an always opening top menu
 - [x] fuzzy picker suport
 - [x] new vmenu item "doc"
+- [x] using ctrl-e and ctrl-y to scroll down and up in the doc window, respectively
+- [x] new option "g:vmenu_enable_markdown_syntax_in_doc_window"
+- [x] The left border can be enabled independently by setting "g:vmenu_enable_left_border"
+- [x] Group name can be displayed in the separator line by setting "g:vmenu_display_group_name"
 
 ## NOTE
 * This plugin may changes radically, use with caution
