@@ -241,8 +241,9 @@ function! s:VmenuWindow.new()
     let vmenuWindow.__curItemIndex = -1
     let vmenuWindow.__componentLength = 0
     let vmenuWindow.parentVmenuWindow = {}  " parent vmenu window instance
-    let vmenuWindow.subVmenuWindow = {}     " sub vmenu window instance"
-    let vmenuWindow.docWindow = {}          " doc window instance
+    let vmenuWindow.subVmenuWindow = s:EventHandler.new()     " sub vmenu window instance"
+    let vmenuWindow.docWindow = s:EventHandler.new()          " doc window instance.
+    let vmenuWindow.scrollbarWindow = s:EventHandler.new()
     return vmenuWindow
 endfunction
 function! s:VmenuWindow.focusNext()
@@ -314,15 +315,13 @@ function! s:VmenuWindow.executeByLeftMouse(mouseClickEvent)
     endif
 endfunction
 function! s:VmenuWindow.close(closeCode, event={})
-    if a:closeCode == s:RECURSIVE_CLOSE && !empty(self.subVmenuWindow)
+    if a:closeCode == s:RECURSIVE_CLOSE
         call self.subVmenuWindow.handleEvent(s:RecursiveCloseEvent.new())
     endif
 
     call self.quickuiWindow.close()
     let self.isOpen = 0
-    if !empty(self.docWindow)
-        call self.docWindow.close()
-    endif
+    call self.docWindow.handleEvent(#{key: "VMENU_CLOSE_DOC_WINDOW"})
     call s:log("winid: " .. self.winId .. " closed")
     if has_key(self, 'parentVmenuWindow') && !empty(self.parentVmenuWindow)
         call self.parentVmenuWindow.handleEvent(s:SubMenuClosedEvent.new(a:closeCode, a:event))
@@ -335,9 +334,7 @@ function! s:VmenuWindow.close(closeCode, event={})
         echo vmenu#itemTips()
     endif
 
-    if has_key(self, 'scrollbarWindow') && !empty(self.scrollbarWindow)
-        call self.scrollbarWindow.handleEvent(#{key: "SCROLLBAR_CLOSE"})
-    endif
+    call self.scrollbarWindow.handleEvent(#{key: "SCROLLBAR_CLOSE"})
 endfunction
 
 function! s:VmenuWindow.__onSubMenuClose(closeCode, event)
@@ -367,7 +364,7 @@ function! s:VmenuWindow.__onMouseHover(event)
     call s:log(printf("winId: %s, itemIdxAtMousePos: %s", self.winId, itemIdxAtMousePos))
 
     if itemIdxAtMousePos == -1
-        if empty(self.subVmenuWindow) || self.subVmenuWindow.isOpen == 0
+        if get(self.subVmenuWindow, "isOpen", 0) == 0
             call self.__renderHighlight(-1)
         endif
 
@@ -386,18 +383,16 @@ function! s:VmenuWindow.__onMouseHover(event)
         call self.__renderHighlight(-1)
         call s:VMenuManager.setFocusedWindow(self)
 
-        if !empty(self.docWindow) && self.docWindow.isOpen == 1
-            call self.docWindow.handleEvent(#{key: "VMENU_CLOSE_DOC_WINDOW"})
-        endif
+        call self.docWindow.handleEvent(#{key: "VMENU_CLOSE_DOC_WINDOW"})
 
-        if !empty(self.subVmenuWindow) && itemIdxAtMousePos != self.__curItemIndex
+        if itemIdxAtMousePos != self.__curItemIndex
             call s:log("winId: " .. self.winId .. " hover at " .. itemIdxAtMousePos)
             call self.subVmenuWindow.handleEvent(s:RecursiveCloseEvent.new())
         endif
     endif
 
     " only execute once at same item
-    if itemIdxAtMousePos == self.__curItemIndex && !empty(self.subVmenuWindow) && get(self.subVmenuWindow, "isOpen", 0) == 1
+    if itemIdxAtMousePos == self.__curItemIndex && get(self.subVmenuWindow, "isOpen", 0) == 1
         return
     endif
 
@@ -406,7 +401,7 @@ function! s:VmenuWindow.__onMouseHover(event)
         return
     endif
 
-    if !empty(self.subVmenuWindow) && itemIdxAtMousePos != self.__curItemIndex
+    if itemIdxAtMousePos != self.__curItemIndex
         call s:log("winId: " .. self.winId .. " hover at " .. itemIdxAtMousePos)
         call self.subVmenuWindow.handleEvent(s:RecursiveCloseEvent.new())
     endif
@@ -521,8 +516,8 @@ function! s:ContextWindow.new(contextWindowBuilder)
     let contextWindow.__displayGroupName = a:contextWindowBuilder.__displayGroupName
     let contextWindow.isOpen = 0
     let contextWindow.parentVmenuWindow = a:contextWindowBuilder.__parentContextWindow
-    let contextWindow.docWindow = {}
-    let contextWindow.scrollbarWindow = {}
+    let contextWindow.docWindow = s:EventHandler.new()
+    let contextWindow.scrollbarWindow = s:EventHandler.new()
     call s:log(printf("new ContextWindow created, winId: %s", contextWindow.winId))
 
     let actionMap = {}
@@ -873,16 +868,12 @@ function! s:ContextWindow.__renderHighlight(offset)
     call win.syntax_end()
     redraw
 
-    if !empty(self.scrollbarWindow) && self.scrollbarWindow.isOpen == 1
-        call self.scrollbarWindow.handleEvent(s:ScrollbarUpdateEvent.new(self.renderStartIdx))
-    endif
+    call self.scrollbarWindow.handleEvent(s:ScrollbarUpdateEvent.new(self.renderStartIdx))
 endfunction
 
 function! s:ContextWindow.__openDocWindowIfAvaliable()
     " close old doc window
-    if !empty(self.docWindow) && self.docWindow.isOpen == 1
-        call self.docWindow.handleEvent(#{key: "VMENU_CLOSE_DOC_WINDOW"})
-    endif
+    call self.docWindow.handleEvent(#{key: "VMENU_CLOSE_DOC_WINDOW"})
 
     if !empty(self.getCurItem().doc) && empty(self.getCurItem().subItemList)
         let maxDocHeight = float2nr(self.__editorStatusSupplier().lines * 0.8)
@@ -1083,7 +1074,6 @@ function! s:TopMenuWindow.__expand()
         return
     endtry
     let self.subVmenuWindow = subContextWindow
-    call self.subVmenuWindow.__renderHighlight(-1)
     return subContextWindow
 endfunction
 " calculate start column to render focused top menu item
@@ -1165,7 +1155,7 @@ function! s:DocWindow.new(textList, parentVmenuWindow, maxHeight)
     let docWindow.__startIdx = 0
     let docWindow.parentVmenuWindow = a:parentVmenuWindow
     let docWindow.winId = rand(srand())
-    let docWindow.scrollbarWindow = {}
+    let docWindow.scrollbarWindow = s:EventHandler.new()
 
     let actionMap = {}
     let scrollDownKey = s:doc_window_scroll_down_key
@@ -1240,9 +1230,7 @@ function! s:DocWindow.scrollDown()
     let renderContent = self.textList[self.__startIdx:self.__startIdx+self.winHeight-1]
     call self.__window.set_text(renderContent)
     redraw
-    if !empty(self.scrollbarWindow) && self.scrollbarWindow.isOpen == 1
-        call self.scrollbarWindow.handleEvent(s:ScrollbarUpdateEvent.new(self.__startIdx))
-    endif
+    call self.scrollbarWindow.handleEvent(s:ScrollbarUpdateEvent.new(self.__startIdx))
 endfunction
 function! s:DocWindow.scrollUp()
     " reach the top. do nothing
@@ -1255,15 +1243,15 @@ function! s:DocWindow.scrollUp()
 
     call self.__window.set_text(renderContent)
     redraw
-    if !empty(self.scrollbarWindow) && self.scrollbarWindow.isOpen == 1
-        call self.scrollbarWindow.handleEvent(s:ScrollbarUpdateEvent.new(self.__startIdx))
-    endif
+    call self.scrollbarWindow.handleEvent(s:ScrollbarUpdateEvent.new(self.__startIdx))
 endfunction
 function! s:DocWindow.close()
-    call self.__window.close()
-    if !empty(self.scrollbarWindow)
-        call self.scrollbarWindow.handleEvent(#{key: "SCROLLBAR_CLOSE"})
+    if self.isOpen == 0
+        return
     endif
+
+    call self.__window.close()
+    call self.scrollbarWindow.handleEvent(#{key: "SCROLLBAR_CLOSE"})
     let self.isOpen = 0
 endfunction
 
@@ -1343,6 +1331,10 @@ function! s:ScrollbarWindow.close()
     let self.isOpen = 0
 endfunction
 function! s:ScrollbarWindow.update(scrolledCnt)
+    if self.isOpen == 0
+        return
+    endif
+
     let renderContent = self.__calcRenderContent(a:scrolledCnt)
     let displayedTextList = renderContent.textList
     call self.__window.set_text(displayedTextList)
