@@ -719,7 +719,7 @@ endfunction
 function! s:ContextWindow.__expand()
     let subItemList = self.contextItemList[self.__curItemIndex].subItemList
     if empty(subItemList)
-        return
+        return s:EventHandler.new()
     endif
 
     let subContextWindow = s:ContextWindow.builder()
