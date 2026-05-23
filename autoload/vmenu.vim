@@ -585,7 +585,8 @@ endfunction
 " y: line number
 function! s:ContextWindow.showAt(x, y)
     if empty(self.contextItemList)
-        throw "NoVisibleItemException"
+        call s:printWarn("vmenu: no visible items.")
+        return s:EventHandler.new()
     endif
 
     let opts = {}
@@ -621,11 +622,7 @@ function! s:ContextWindow.showAt(x, y)
 endfunction
 function! s:ContextWindow.showAtCursor()
     let cursorPos = quickui#core#around_cursor(self.winWidth, self.contextItemList->len())
-    try
-        call self.showAt(cursorPos[1], cursorPos[0])
-    catch "NoVisibleItemException"
-        " ignore
-    endtry
+    call self.showAt(cursorPos[1], cursorPos[0])
 
     call self.__focusFirstMatch(range(self.__componentLength))
     return self
@@ -1064,15 +1061,11 @@ function! s:TopMenuWindow.__expand()
 
     let x = self.__getStartColumnNrByIndex(self.__curItemIndex)
     let y = 1
-    try
-        let subContextWindow = s:ContextWindow.builder()
-                    \.contextItemList(subItemList)
-                    \.parentVmenuWindow(self)
-                    \.build()
-                    \.showAt(x, 1)
-    catch "NoVisibleItemException"
-        return
-    endtry
+    let subContextWindow = s:ContextWindow.builder()
+                \.contextItemList(subItemList)
+                \.parentVmenuWindow(self)
+                \.build()
+                \.showAt(x, 1)
     let self.subVmenuWindow = subContextWindow
     return subContextWindow
 endfunction
@@ -1321,7 +1314,9 @@ function! s:ScrollbarWindow.__calcRenderContent(scrolledCnt)
     let highlight = []
     let scrollbarOffset = (self.winHeight - self.thumbHeight) * a:scrolledCnt / (self.total - self.winHeight)
     for i in range(self.thumbHeight)
-        let textList[scrollbarOffset+i] = '█'
+        if scrollbarOffset+i < len(textList)
+            let textList[scrollbarOffset+i] = '█'
+        endif
         call add(highlight, #{highlight: self.thumbColor, x1: 0, y1: scrollbarOffset+i, x2: 1, y2: scrollbarOffset+i})
     endfor
     return #{textList: textList, highlight: highlight}
@@ -1811,13 +1806,9 @@ function! vmenu#openContextWindow(content, opts)
         let contextWindowBuilder = contextWindowBuilder.editorStatusSupplier({ -> s:getEditorStatus(a:opts.curMode) })
     endif
 
-    try
-        call contextWindowBuilder.build()
-                    \.showAtCursor()
-        call s:VMenuManager.startListening()
-    catch "NoVisibleItemException"
-        return
-    endtry
+    call contextWindowBuilder.build()
+                \.showAtCursor()
+    call s:VMenuManager.startListening()
 endfunction
 " userItemList: quickui context menu or vmenu context menu
 " return parsed context item list
