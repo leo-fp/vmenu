@@ -17,6 +17,8 @@ Version:	0.3.0
     3.9 vmenu#installContextMenu().................|vmenu#installContextMenu()|
     3.10 vmenu#queryItems()................................|vmenu#queryItems()|
     3.11 vmenu#executeItemById()......................|vmenu#executeItemById()|
+    3.12 vmenu#openInspector()..........................|vmenu#openInspector()|
+    3.13 vmenu#closeInspector()........................|vmenu#closeInspector()|
 4. vmenu item field	.........................................|vmenu-item-field|
     4.1 show-ft.................................................|vmenu-show-ft|
     4.2 show-mode.............................................|vmenu-show-mode|
@@ -42,6 +44,7 @@ Version:	0.3.0
     6.7 g:vmenu_enable_markdown_syntax_in_doc_window..|vmenu_enable_markdown_syntax_in_doc_window|
     6.8 g:vmenu_enable_left_border...................|vmenu_enable_left_border|
     6.9 g:vmenu_display_group_name...................|vmenu_display_group_name|
+    6.10 g:vmenu_log_appender_type....................|vmenu_log_appender_type|
 7. vmenu Changelog............................................|vmenu-changelog|
 
 ==============================================================================
@@ -187,6 +190,21 @@ Execute item by item id.
 
 param:
     itemId: item id.
+
+
+3.12 vmenu#openInspector()                                *vmenu#openInspector()*
+----------------------------------------
+Open the inspector window to check the status of vmenu.
+
+the log can be appended to the inspector window by setting:
+>
+    let g:vmenu_enable_log = 1
+    let g:vmenu_log_appender_type = 1
+
+
+3.13 vmenu#closeInspector()                             *vmenu#closeInspector()*
+----------------------------------------
+Close the inspector window.
 
 
 ==============================================================================
@@ -463,6 +481,14 @@ Effective for both context menu and dropdown menu of top menu.
 how to set the group name in the user defined separator line?
 >
     #{isSep:1, group: "group2"},
+
+
+6.10 vmenu_log_appender_type                           *vmenu_log_appender_type*
+----------------------------------------
+Set the destination where the logs should be appended.
+    0: (default) message-history. can be viewed by ":message".
+    1: inspector window. can be viewed by ":call vmenu#openInspector()".
+
 
 ==============================================================================
 7. vmenu Changelog					                           *vmenu-changelog*

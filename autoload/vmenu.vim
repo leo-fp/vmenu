@@ -42,11 +42,21 @@ let s:doc_window_scroll_up_key = get(g:, "vmenu_doc_window_scroll_up_key", "\<C-
 let s:enable_markdown_syntax_in_doc_window = get(g:, "vmenu_enable_markdown_syntax_in_doc_window", 0)
 let s:enable_left_border = get(g:, "vmenu_enable_left_border", 0)
 let s:display_group_name = get(g:, "vmenu_display_group_name", 0)
+let s:log_appender_type = get(g:, "vmenu_log_appender_type", 0)
 
+let s:logMsg = []
+function! s:writeToLogMsg(msg)
+    call add(s:logMsg, a:msg)
+    call s:Inspector.update()
+endfunction
 function! s:echom(msg)
     echom a:msg
 endfunction
-let s:logAppender = function("s:echom")
+let s:logAppenderMap = #{
+            \ 0: function("s:echom"),
+            \ 1: function("s:writeToLogMsg")
+            \}
+let s:logAppender = get(s:logAppenderMap, s:log_appender_type)
 let s:leftBorderChar = "▌"
 
 "-------------------------------------------------------------------------------
@@ -1898,6 +1908,14 @@ function! vmenu#matchRegex(regex)
     return { editorStatus -> match(editorStatus.selectedText, a:regex) != -1 }
 endfunction
 
+function! vmenu#openInspector()
+    call s:Inspector.show()
+endfunction
+
+function! vmenu#closeInspector()
+    call s:Inspector.close()
+endfunction
+
 "-------------------------------------------------------------------------------
 " utils
 "-------------------------------------------------------------------------------
@@ -1961,6 +1979,54 @@ endfunction
 " only used in testing
 let s:errorList = []
 
+"-------------------------------------------------------------------------------
+" class Inspector
+"-------------------------------------------------------------------------------
+" close old inspector window
+if has_key(s:, "Inspector")
+    call s:Inspector.close()
+endif
+let s:Inspector = {}
+let s:Inspector.__win = quickui#window#new()
+function! s:Inspector.getInfo()
+    let text = []
+    call add(text, printf("Mouse position: %s", #{x: getmousepos().screencol, y: getmousepos().screenrow}))
+    call add(text, printf("Focused window id: %s", get(s:VMenuManager.__focusedWindow, "winId", "-1")))
+    call add(text, "")
+    call add(text, "Log:")
+
+    let maxVisibleLogSize = max([0, winheight(0) - len(text)])
+    let logStartIdx = max([0, len(s:logMsg) - maxVisibleLogSize])
+    for msg in s:logMsg[logStartIdx:]
+        call add(text, msg)
+    endfor
+    return text
+endfunction
+function! s:Inspector.__calcWidowHeight()
+    return float2nr(&lines)
+endfunction
+function! s:Inspector.show()
+    let opts = {}
+    let opts.w = 100
+    let opts.h = self.__calcWidowHeight()
+    let opts.wrap = 1
+    let opts.y = 0
+    let opts.x = &columns
+    let text = self.getInfo()
+
+    call self.__win.open(text, opts)
+
+    call self.__win.show(1)
+    redraw
+    call self.update()
+endfunction
+function! s:Inspector.update()
+    call self.__win.set_text(self.getInfo())
+    redraw
+endfunction
+function! s:Inspector.close()
+    call self.__win.close()
+endfunction
 
 "-------------------------------------------------------------------------------
 " interface
