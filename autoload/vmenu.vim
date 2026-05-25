@@ -443,6 +443,7 @@ function! s:EventHandler.handleEvent(inputEvent)
 
     call s:log(printf("winId: %s, event detected: %s", self.winId, s:event2String(a:inputEvent)))
     call self.dispatch(a:inputEvent)
+    call s:Inspector.update()
 endfunction
 function! s:EventHandler.dispatch(inputEvent)
     call get(self.__actionMap, a:inputEvent.key, { -> ''})(a:inputEvent)
