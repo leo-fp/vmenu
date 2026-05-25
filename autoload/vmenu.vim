@@ -2002,13 +2002,10 @@ function! s:Inspector.getInfo()
     endfor
     return text
 endfunction
-function! s:Inspector.__calcWidowHeight()
-    return float2nr(&lines)
-endfunction
 function! s:Inspector.show()
     let opts = {}
     let opts.w = 100
-    let opts.h = self.__calcWidowHeight()
+    let opts.h = float2nr(&lines)
     let opts.wrap = 1
     let opts.y = 0
     let opts.x = &columns
