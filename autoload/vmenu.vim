@@ -1150,7 +1150,7 @@ endfunction
 " class DocWindow extends EventHandler implements dumpContent
 "-------------------------------------------------------------------------------
 let s:DocWindow = {}
-function! s:DocWindow.new(textList, parentVmenuWindow, maxHeight)
+function! s:DocWindow.new(textList, parentVmenuWindow, maxHeight, enableEscToClose=0)
     let docWindow = s:EventHandler.new()
     call extend(docWindow, deepcopy(s:DocWindow, 1), "force")
     let docWindow.isOpen = 0
@@ -1167,6 +1167,9 @@ function! s:DocWindow.new(textList, parentVmenuWindow, maxHeight)
     let actionMap[scrollDownKey]            = { event -> docWindow.scrollDown() }
     let actionMap[scrollUpKey]              = { event -> docWindow.scrollUp() }
     let actionMap["VMENU_CLOSE_DOC_WINDOW"] = { event -> docWindow.close() }
+    if a:enableEscToClose
+        let actionMap["\<ESC>"] = { event -> docWindow.close(1) }
+    endif
     let docWindow.__actionMap = actionMap
 
     " visible window width. max width in text list
@@ -1214,6 +1217,12 @@ function! s:DocWindow.showAt(x, y)
     call s:VMenuManager.setFocusedWindow(self)
     redraw
 endfunction
+function! s:DocWindow.showAtCursor()
+    let scrollBarWidth = len(self.textList) > self.winHeight ? 1 : 0
+    let cursorPos = quickui#core#around_cursor(self.winWidth+scrollBarWidth, self.textList->len())
+
+    call self.showAt(cursorPos[1], cursorPos[0])
+endfunction
 function! s:DocWindow.dispatch(inputEvent)
     if has_key(self.__actionMap, a:inputEvent.key)
         call get(self.__actionMap, a:inputEvent.key, { -> ''})(a:inputEvent)
@@ -1249,7 +1258,7 @@ function! s:DocWindow.scrollUp()
     redraw
     call self.scrollbarWindow.handleEvent(s:ScrollbarUpdateEvent.new(self.__startIdx))
 endfunction
-function! s:DocWindow.close()
+function! s:DocWindow.close(stopListening=0)
     if self.isOpen == 0
         return
     endif
@@ -1257,6 +1266,10 @@ function! s:DocWindow.close()
     call self.__window.close()
     call self.scrollbarWindow.handleEvent(#{key: "SCROLLBAR_CLOSE"})
     let self.isOpen = 0
+
+    if a:stopListening
+        call s:VMenuManager.stopListen()
+    endif
 endfunction
 
 "-------------------------------------------------------------------------------
@@ -1915,6 +1928,12 @@ endfunction
 
 function! vmenu#closeInspector()
     call s:Inspector.close()
+endfunction
+
+function! vmenu#openDocWindow(textList)
+    call s:DocWindow.new(a:textList, s:EventHandler.new(), float2nr(&lines * 0.8), 1)
+                \.showAtCursor()
+    call s:VMenuManager.startListening()
 endfunction
 
 "-------------------------------------------------------------------------------
@@ -3918,6 +3937,16 @@ if 0
         call assert_true([] != filter(copy(s:VMenuManager.__focusedWindow.getCurItem().syntaxRegionList), {idx, val -> val == ['VmenuSelect', 1, 6]}))
         call assert_true([] != filter(copy(s:VMenuManager.__focusedWindow.contextItemList[2].syntaxRegionList), {idx, val -> val == ['VmenuLeftBorder', 0, 1]}))
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+    endif
+
+    " standalone doc window test
+    if 1
+        call s:DocWindow.new(["hello", "world"], s:EventHandler.new(), 1, 1)
+                    \.showAtCursor()
+        "call s:VMenuManager.startListening()
+        call assert_equal(6, s:VMenuManager.__focusedWindow.winWidth)
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+        call assert_equal(0, s:VMenuManager.__focusedWindow.isOpen)
     endif
 
     call s:showErrors()
