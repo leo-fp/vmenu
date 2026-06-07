@@ -1150,7 +1150,8 @@ endfunction
 " class DocWindow extends EventHandler implements dumpContent
 "-------------------------------------------------------------------------------
 let s:DocWindow = {}
-function! s:DocWindow.new(textList, parentVmenuWindow, maxHeight, enableEscToClose=0)
+" maxWidth: max window width. 95% of the screen width by default.
+function! s:DocWindow.new(textList, parentVmenuWindow, maxHeight, enableEscToClose=0, maxWidth=float2nr(&columns*0.95))
     let docWindow = s:EventHandler.new()
     call extend(docWindow, deepcopy(s:DocWindow, 1), "force")
     let docWindow.isOpen = 0
@@ -1168,7 +1169,7 @@ function! s:DocWindow.new(textList, parentVmenuWindow, maxHeight, enableEscToClo
     let actionMap[scrollUpKey]              = { event -> docWindow.scrollUp() }
     let actionMap["VMENU_CLOSE_DOC_WINDOW"] = { event -> docWindow.close() }
     if a:enableEscToClose
-        let actionMap["\<ESC>"] = { event -> docWindow.close(1) }
+        let actionMap["\<ESC>"] = { event -> docWindow.close(1) }   " stop listening after closing
     endif
     let docWindow.__actionMap = actionMap
 
@@ -1177,7 +1178,15 @@ function! s:DocWindow.new(textList, parentVmenuWindow, maxHeight, enableEscToClo
     let docWindow.maxTextLen = docWindow.winWidth
 
     " visible window height
-    let docWindow.winHeight = min([len(a:textList), a:maxHeight])
+    let wrappedHeight = 0
+    for text in a:textList
+        if empty(text)
+            let wrappedHeight += 1
+        else
+            let wrappedHeight += (1.0 * strwidth(text) / a:maxWidth)->ceil()->float2nr()
+        endif
+    endfor
+    let docWindow.winHeight = min([wrappedHeight, a:maxHeight])
     return docWindow
 endfunction
 function! s:DocWindow.showAt(x, y)
@@ -1194,6 +1203,7 @@ function! s:DocWindow.showAt(x, y)
     let opts.x = a:x
     let opts.y = a:y
     let opts.color = "VmenuDocWindow"
+    let opts.wrap = 1
     if s:enable_markdown_syntax_in_doc_window == 1
         let opts.syntax = "markdown"
     endif
@@ -3700,7 +3710,7 @@ if 0
     if 1
         call vmenu#cleanTopMenu()
         call s:VMenuManager.initTopMenuItems('1', vmenu#parse_context([
-                    \ #{name: '1', doc: [repeat('-', &columns)]},
+                    \ #{name: repeat('a', &columns/2), doc: [repeat('-', &columns)]},
                     \], g:VMENU#ITEM_VERSION.VMENU))
         call s:TopMenuWindow.builder()
                     \.topMenuItemList(s:VMenuManager.__allTopMenuItemList)
@@ -3709,7 +3719,7 @@ if 0
         "call s:VMenuManager.startListening()
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<CR>"))
         call assert_equal(s:VMenuManager.__focusedWindow.parentVmenuWindow.y+1, s:VMenuManager.__focusedWindow.y)
-        call assert_equal(1, s:VMenuManager.__focusedWindow.winHeight)
+        call assert_equal(2, s:VMenuManager.__focusedWindow.winHeight)
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
     endif
@@ -3947,6 +3957,24 @@ if 0
         call assert_equal(6, s:VMenuManager.__focusedWindow.winWidth)
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
         call assert_equal(0, s:VMenuManager.__focusedWindow.isOpen)
+    endif
+
+    " wrap the text if it exceeds maxWidth
+    if 1
+        call s:DocWindow.new(["0123456789"], s:EventHandler.new(), 5, 1, 5)
+                    \.showAtCursor()
+        "call s:VMenuManager.startListening()
+        call assert_equal(2, s:VMenuManager.__focusedWindow.winHeight)
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+    endif
+
+    " test empty line in the doc window
+    if 1
+        call s:DocWindow.new(["hello", ""], s:EventHandler.new(), 5, 1, 5)
+                    \.showAtCursor()
+        "call s:VMenuManager.startListening()
+        call assert_equal(2, s:VMenuManager.__focusedWindow.winHeight)
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
     endif
 
     call s:showErrors()
