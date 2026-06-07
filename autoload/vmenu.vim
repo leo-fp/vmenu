@@ -1174,8 +1174,9 @@ function! s:DocWindow.new(textList, parentVmenuWindow, maxHeight, enableEscToClo
     let docWindow.__actionMap = actionMap
 
     " visible window width. max width in text list
-    let docWindow.winWidth = reduce(a:textList, { acc, val -> max([acc, strwidth(val)]) }, 0)
-    let docWindow.maxTextLen = docWindow.winWidth
+    let maxTextLen = reduce(a:textList, { acc, val -> max([acc, strwidth(val)]) }, 0)
+    let docWindow.maxTextLen = maxTextLen
+    let docWindow.winWidth = min([maxTextLen, a:maxWidth])
 
     " visible window height
     let wrappedHeight = 0
