@@ -885,7 +885,11 @@ function! s:ContextWindow.__openDocWindowIfAvaliable()
 
     if !empty(self.getCurItem().doc) && empty(self.getCurItem().subItemList)
         let maxDocHeight = float2nr(self.__editorStatusSupplier().lines * 0.8)
-        let docWindow = s:DocWindow.new(self.getCurItem().doc, self, maxDocHeight)
+        let docWindow = s:DocWindow.builder()
+                    \.textList(self.getCurItem().doc)
+                    \.parentVmenuWindow(self)
+                    \.maxHeight(maxDocHeight)
+                    \.build()
         let [x, y] = self.__calcExpandPos(docWindow.winWidth)
         call docWindow.showAt(x, y)
         let self.docWindow = docWindow
@@ -1147,18 +1151,57 @@ function! s:TopMenuWindow.getItemIndexOnPos(mousePos)
 endfunction
 
 "-------------------------------------------------------------------------------
+" class DocWindowBuilder
+"-------------------------------------------------------------------------------
+let s:DocWindowBuilder = {}
+function! s:DocWindowBuilder.new()
+    let docWindowBuilder = deepcopy(s:DocWindowBuilder, 1)
+    let docWindowBuilder.__textList = []
+    let docWindowBuilder.__parentVmenuWindow = s:EventHandler.new()
+    let docWindowBuilder.__maxHeight = float2nr(&lines * 0.8)
+    let docWindowBuilder.__enableEscToClose = 0
+    let docWindowBuilder.__maxWidth = float2nr(&columns*0.95) " max window width. 95% of the screen width by default.
+    return docWindowBuilder
+endfunction
+function! s:DocWindowBuilder.textList(textList)
+    let self.__textList = a:textList
+    return self
+endfunction
+function! s:DocWindowBuilder.parentVmenuWindow(parentVmenuWindow)
+    let self.__parentVmenuWindow = a:parentVmenuWindow
+    return self
+endfunction
+function! s:DocWindowBuilder.maxHeight(maxHeight)
+    let self.__maxHeight = a:maxHeight
+    return self
+endfunction
+function! s:DocWindowBuilder.enableEscToClose()
+    let self.__enableEscToClose = 1
+    return self
+endfunction
+function! s:DocWindowBuilder.maxWidth(maxWidth)
+    let self.__maxWidth = a:maxWidth
+    return self
+endfunction
+function! s:DocWindowBuilder.build()
+    return s:DocWindow.new(self)
+endfunction
+
+"-------------------------------------------------------------------------------
 " class DocWindow extends EventHandler implements dumpContent
 "-------------------------------------------------------------------------------
 let s:DocWindow = {}
-" maxWidth: max window width. 95% of the screen width by default.
-function! s:DocWindow.new(textList, parentVmenuWindow, maxHeight, enableEscToClose=0, maxWidth=float2nr(&columns*0.95))
+function! s:DocWindow.builder()
+    return s:DocWindowBuilder.new()
+endfunction
+function! s:DocWindow.new(docWindowBuilder)
     let docWindow = s:EventHandler.new()
     call extend(docWindow, deepcopy(s:DocWindow, 1), "force")
     let docWindow.isOpen = 0
-    let docWindow.textList = a:textList
+    let docWindow.textList = a:docWindowBuilder.__textList
     let docWindow.highlight = []
     let docWindow.__startIdx = 0
-    let docWindow.parentVmenuWindow = a:parentVmenuWindow
+    let docWindow.parentVmenuWindow = a:docWindowBuilder.__parentVmenuWindow
     let docWindow.winId = rand(srand())
     let docWindow.scrollbarWindow = s:EventHandler.new()
 
@@ -1168,26 +1211,26 @@ function! s:DocWindow.new(textList, parentVmenuWindow, maxHeight, enableEscToClo
     let actionMap[scrollDownKey]            = { event -> docWindow.scrollDown() }
     let actionMap[scrollUpKey]              = { event -> docWindow.scrollUp() }
     let actionMap["VMENU_CLOSE_DOC_WINDOW"] = { event -> docWindow.close() }
-    if a:enableEscToClose
+    if a:docWindowBuilder.__enableEscToClose
         let actionMap["\<ESC>"] = { event -> docWindow.close(1) }   " stop listening after closing
     endif
     let docWindow.__actionMap = actionMap
 
     " visible window width. max width in text list
-    let maxTextLen = reduce(a:textList, { acc, val -> max([acc, strwidth(val)]) }, 0)
+    let maxTextLen = reduce(a:docWindowBuilder.__textList, { acc, val -> max([acc, strwidth(val)]) }, 0)
     let docWindow.maxTextLen = maxTextLen
-    let docWindow.winWidth = min([maxTextLen, a:maxWidth])
+    let docWindow.winWidth = min([maxTextLen, a:docWindowBuilder.__maxWidth])
 
     " visible window height
     let wrappedHeight = 0
-    for text in a:textList
+    for text in a:docWindowBuilder.__textList
         if empty(text)
             let wrappedHeight += 1
         else
-            let wrappedHeight += (1.0 * strwidth(text) / a:maxWidth)->ceil()->float2nr()
+            let wrappedHeight += (1.0 * strwidth(text) / a:docWindowBuilder.__maxWidth)->ceil()->float2nr()
         endif
     endfor
-    let docWindow.winHeight = min([wrappedHeight, a:maxHeight])
+    let docWindow.winHeight = min([wrappedHeight, a:docWindowBuilder.__maxHeight])
     return docWindow
 endfunction
 function! s:DocWindow.showAt(x, y)
@@ -1942,7 +1985,10 @@ function! vmenu#closeInspector()
 endfunction
 
 function! vmenu#openDocWindow(textList)
-    call s:DocWindow.new(a:textList, s:EventHandler.new(), float2nr(&lines * 0.8), 1)
+    call s:DocWindow.builder()
+                \.textList(a:textList)
+                \.enableEscToClose()
+                \.build()
                 \.showAtCursor()
     call s:VMenuManager.startListening()
 endfunction
@@ -3952,7 +3998,11 @@ if 0
 
     " standalone doc window test
     if 1
-        call s:DocWindow.new(["hello", "world"], s:EventHandler.new(), 1, 1)
+        call s:DocWindow.builder()
+                    \.textList(["hello", "world"])
+                    \.maxHeight(1)
+                    \.enableEscToClose()
+                    \.build()
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
         call assert_equal(6, s:VMenuManager.__focusedWindow.winWidth)
@@ -3962,7 +4012,12 @@ if 0
 
     " wrap the text if it exceeds maxWidth
     if 1
-        call s:DocWindow.new(["0123456789"], s:EventHandler.new(), 5, 1, 5)
+        call s:DocWindow.builder()
+                    \.textList(["0123456789"])
+                    \.maxHeight(5)
+                    \.enableEscToClose()
+                    \.maxWidth(5)
+                    \.build()
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
         call assert_equal(2, s:VMenuManager.__focusedWindow.winHeight)
@@ -3971,7 +4026,12 @@ if 0
 
     " test empty line in the doc window
     if 1
-        call s:DocWindow.new(["hello", ""], s:EventHandler.new(), 5, 1, 5)
+        call s:DocWindow.builder()
+                    \.textList(["hello", ""])
+                    \.maxHeight(5)
+                    \.enableEscToClose()
+                    \.maxWidth(5)
+                    \.build()
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
         call assert_equal(2, s:VMenuManager.__focusedWindow.winHeight)
