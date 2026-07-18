@@ -145,6 +145,17 @@ function! s:ScrollbarUpdateEvent.new(scrolledCnt)
     let scrollbarUpdateEvent.scrolledCnt = a:scrolledCnt
     return scrollbarUpdateEvent
 endfunction
+"
+"-------------------------------------------------------------------------------
+" class ScrollbarUpdateByDeltaEvent
+"-------------------------------------------------------------------------------
+let s:ScrollbarUpdateByDeltaEvent = {}
+function! s:ScrollbarUpdateByDeltaEvent.new(delta)
+    let scrollbarUpdateByDeltaEvent = deepcopy(s:ScrollbarUpdateByDeltaEvent, 1)
+    let scrollbarUpdateByDeltaEvent.key = "SCROLLBAR_UPDATE_BY_OFFSET"
+    let scrollbarUpdateByDeltaEvent.delta = a:delta
+    return scrollbarUpdateByDeltaEvent
+endfunction
 
 "-------------------------------------------------------------------------------
 " color
@@ -1160,7 +1171,7 @@ function! s:DocWindowBuilder.new()
     let docWindowBuilder.__parentVmenuWindow = s:EventHandler.new()
     let docWindowBuilder.__maxHeight = float2nr(&lines * 0.8)
     let docWindowBuilder.__enableEscToClose = 0
-    let docWindowBuilder.__maxWidth = float2nr(&columns*0.95) " max window width. 95% of the screen width by default.
+    let docWindowBuilder.__maxWidth = float2nr(&columns*0.95) " max window width (including scrollbar). 95% of the screen width by default.
     return docWindowBuilder
 endfunction
 function! s:DocWindowBuilder.textList(textList)
@@ -1188,7 +1199,95 @@ function! s:DocWindowBuilder.build()
 endfunction
 
 "-------------------------------------------------------------------------------
+" class DocPane extends EventHandler implements dumpContent
+"-------------------------------------------------------------------------------
+let s:DocPane = {}
+function! s:DocPane.new(maxHeight, maxWidth, textList)
+    let docPane = s:EventHandler.new()
+    call extend(docPane, deepcopy(s:DocPane, 1), "force")
+    let docPane.isOpen = 0
+    let docPane.textList = a:textList
+    let docPane.__startIdx = 0
+    let docPane.winId = rand(srand())
+
+    let actionMap = {}
+    let scrollDownKey = s:doc_window_scroll_down_key
+    let scrollUpKey = s:doc_window_scroll_up_key
+    let actionMap[scrollDownKey]            = { event -> docPane.scrollDown() }
+    let actionMap[scrollUpKey]              = { event -> docPane.scrollUp() }
+    let actionMap["VMENU_CLOSE_DOC_WINDOW"] = { event -> docPane.close() }
+    let docPane.__actionMap = actionMap
+
+    let docPane.winWidth = a:maxWidth
+    let docPane.winHeight = a:maxHeight
+    let docPane.wrappedHeight = s:calcWrappedHeight(a:textList, a:maxWidth)
+    return docPane
+endfunction
+function! s:DocPane.showAt(x, y)
+    let win = quickui#window#new()
+
+    let opts = {}
+    let opts.w = self.winWidth
+    let opts.h = self.winHeight
+    let opts.x = a:x
+    let opts.y = a:y
+    let opts.color = "VmenuDocWindow"
+    let opts.wrap = 1
+    if s:enable_markdown_syntax_in_doc_window == 1
+        let opts.syntax = "markdown"
+    endif
+
+    let visibleTextList = self.textList[self.__startIdx:self.__startIdx+self.winHeight-1]
+    call win.open(visibleTextList, opts)
+
+    let self.__window = win
+    let self.isOpen = 1
+    let self.x = a:x " column number
+    let self.y = a:y " line number
+
+    call self.__window.show(1)
+    redraw
+endfunction
+function! s:DocPane.dumpContent()
+    return #{textList: self.__window.text, highlight: []}
+endfunction
+function! s:DocPane.scrollDown()
+    " reach the bottom. do nothing
+    if s:calcWrappedHeight(self.textList[self.__startIdx:-1], self.winWidth) <= self.winHeight
+        return
+    endif
+
+    let self.__startIdx = self.__startIdx + 1
+    let renderContent = self.textList[self.__startIdx:self.__startIdx+self.winHeight-1]
+    call self.__window.set_text(renderContent)
+    redraw
+endfunction
+function! s:DocPane.scrollUp()
+    " reach the top. do nothing
+    if self.__startIdx == 0
+        return
+    endif
+
+    let self.__startIdx = self.__startIdx - 1
+    let renderContent = self.textList[self.__startIdx:self.__startIdx+self.winHeight-1]
+
+    call self.__window.set_text(renderContent)
+    redraw
+endfunction
+function! s:DocPane.close()
+    if self.isOpen == 0
+        return
+    endif
+
+    call self.__window.close()
+    let self.isOpen = 0
+endfunction
+
+"-------------------------------------------------------------------------------
 " class DocWindow extends EventHandler implements dumpContent
+"
+" The DocWindow serves as a frame that determines the actual drawing area and routes events to the
+" DocPane and ScrollbarPane.
 "-------------------------------------------------------------------------------
 let s:DocWindow = {}
 function! s:DocWindow.builder()
@@ -1203,7 +1302,8 @@ function! s:DocWindow.new(docWindowBuilder)
     let docWindow.__startIdx = 0
     let docWindow.parentVmenuWindow = a:docWindowBuilder.__parentVmenuWindow
     let docWindow.winId = rand(srand())
-    let docWindow.scrollbarWindow = s:EventHandler.new()
+    let docWindow.docPane = s:EventHandler.new()
+    let docWindow.scrollbarPane = s:EventHandler.new()
 
     let actionMap = {}
     let scrollDownKey = s:doc_window_scroll_down_key
@@ -1216,43 +1316,29 @@ function! s:DocWindow.new(docWindowBuilder)
     endif
     let docWindow.__actionMap = actionMap
 
+    let wrappedHeight = s:calcWrappedHeight(a:docWindowBuilder.__textList, a:docWindowBuilder.__maxWidth)
+    " visible window height
+    let docWindow.winHeight = min([wrappedHeight, a:docWindowBuilder.__maxHeight])
+    let docWindow.scrollbarPaneWidth = wrappedHeight > docWindow.winHeight ? 1 : 0
+
     " visible window width. max width in text list
     let maxTextLen = reduce(a:docWindowBuilder.__textList, { acc, val -> max([acc, strwidth(val)]) }, 0)
-    let docWindow.maxTextLen = maxTextLen
-    let docWindow.winWidth = min([maxTextLen, a:docWindowBuilder.__maxWidth])
+    let docWindow.docPaneWidth = min([maxTextLen, a:docWindowBuilder.__maxWidth - docWindow.scrollbarPaneWidth])
 
-    " visible window height
-    let wrappedHeight = 0
-    for text in a:docWindowBuilder.__textList
-        if empty(text)
-            let wrappedHeight += 1
-        else
-            let wrappedHeight += (1.0 * strwidth(text) / a:docWindowBuilder.__maxWidth)->ceil()->float2nr()
-        endif
-    endfor
-    let docWindow.winHeight = min([wrappedHeight, a:docWindowBuilder.__maxHeight])
+    let docWindow.winWidth = docWindow.docPaneWidth + docWindow.scrollbarPaneWidth
     return docWindow
 endfunction
 function! s:DocWindow.showAt(x, y)
     let win = quickui#window#new()
-    let displayedTextList = self.textList[self.__startIdx:self.__startIdx+self.winHeight-1]
-    if len(self.textList) > self.winHeight
-        let self.winWidth = self.winWidth + 1   " plus one for scrollbar
-    endif
 
     let opts = {}
     let opts.w = self.winWidth
     let opts.h = self.winHeight
-    let opts.padding = [0, 1, 0, 1]
     let opts.x = a:x
     let opts.y = a:y
     let opts.color = "VmenuDocWindow"
-    let opts.wrap = 1
-    if s:enable_markdown_syntax_in_doc_window == 1
-        let opts.syntax = "markdown"
-    endif
 
-    call win.open(displayedTextList, opts)
+    call win.open([], opts)
 
     let self.__window = win
     let self.isOpen = 1
@@ -1260,20 +1346,25 @@ function! s:DocWindow.showAt(x, y)
     let self.y = win.y " line number
 
     call self.__window.show(1)
-
     redraw
-    if self.textList->len() > self.winHeight    " need to add scrollbar
+
+    " show docPane
+    let docPane = s:DocPane.new(self.winHeight, self.docPaneWidth, self.textList)
+    call docPane.showAt(self.x, self.y)
+    let self.docPane = docPane
+
+    " show scrollbarPane if needed
+    if self.scrollbarPaneWidth > 0
         let scrollbarWidow = s:ScrollbarWindow.new(self.winHeight, self.textList->len(), 2)
-        call scrollbarWidow.showAt(self.x+self.maxTextLen, self.y)
-        let self.scrollbarWindow = scrollbarWidow
+        call scrollbarWidow.showAt(self.x+self.docPaneWidth, self.y)
+        let self.scrollbarPane = scrollbarWidow
     endif
 
     call s:VMenuManager.setFocusedWindow(self)
     redraw
 endfunction
 function! s:DocWindow.showAtCursor()
-    let scrollBarWidth = len(self.textList) > self.winHeight ? 1 : 0
-    let cursorPos = quickui#core#around_cursor(self.winWidth+scrollBarWidth, self.textList->len())
+    let cursorPos = quickui#core#around_cursor(self.winWidth, self.textList->len())
 
     call self.showAt(cursorPos[1], cursorPos[0])
 endfunction
@@ -1285,40 +1376,25 @@ function! s:DocWindow.dispatch(inputEvent)
     endif
 endfunction
 function! s:DocWindow.dumpContent()
-    return #{textList: self.__window.text, highlight: self.highlight}
+    return #{textList: self.__window.text, highlight: []}
 endfunction
 function! s:DocWindow.scrollDown()
-    " reach the bottom. do nothing
-    if self.__startIdx + self.winHeight >= len(self.textList)
-        return
-    endif
-
-    let self.__startIdx = self.__startIdx + 1
-    let renderContent = self.textList[self.__startIdx:self.__startIdx+self.winHeight-1]
-    call self.__window.set_text(renderContent)
+    call self.docPane.handleEvent(s:KeyStrokeEvent.new(s:doc_window_scroll_down_key))
+    call self.scrollbarPane.handleEvent(s:ScrollbarUpdateByDeltaEvent.new(1))
     redraw
-    call self.scrollbarWindow.handleEvent(s:ScrollbarUpdateEvent.new(self.__startIdx))
 endfunction
 function! s:DocWindow.scrollUp()
-    " reach the top. do nothing
-    if self.__startIdx == 0
-        return
-    endif
-
-    let self.__startIdx = self.__startIdx - 1
-    let renderContent = self.textList[self.__startIdx:self.__startIdx+self.winHeight-1]
-
-    call self.__window.set_text(renderContent)
-    redraw
-    call self.scrollbarWindow.handleEvent(s:ScrollbarUpdateEvent.new(self.__startIdx))
+    call self.docPane.handleEvent(s:KeyStrokeEvent.new(s:doc_window_scroll_up_key))
+    call self.scrollbarPane.handleEvent(s:ScrollbarUpdateByDeltaEvent.new(-1))
 endfunction
 function! s:DocWindow.close(stopListening=0)
     if self.isOpen == 0
         return
     endif
 
+    call self.scrollbarPane.handleEvent(#{key: "SCROLLBAR_CLOSE"})
+    call self.docPane.handleEvent(#{key: "VMENU_CLOSE_DOC_WINDOW"})
     call self.__window.close()
-    call self.scrollbarWindow.handleEvent(#{key: "SCROLLBAR_CLOSE"})
     let self.isOpen = 0
 
     if a:stopListening
@@ -1347,6 +1423,8 @@ function! s:ScrollbarWindow.new(winHeight, total, thumbHeight=2, barWinColor="Vm
     let actionMap = {}
     let actionMap["SCROLLBAR_UPDATE"] =
                 \ { scrollbarUpdateEvent -> scrollbarWindow.update(scrollbarUpdateEvent.scrolledCnt) }
+    let actionMap["SCROLLBAR_UPDATE_BY_OFFSET"] =
+                \ { scrollbarUpdateByDeltaEvent -> scrollbarWindow.updateByDelta(scrollbarUpdateByDeltaEvent.delta) }
     let actionMap["SCROLLBAR_CLOSE"] =
                 \ { event -> scrollbarWindow.close() }
     let scrollbarWindow.__actionMap = actionMap
@@ -1375,6 +1453,7 @@ function! s:ScrollbarWindow.showAt(x, y)
     let self.x = win.x " column number
     let self.y = win.y " line number
     let self.highlight = renderContent.highlight
+    let self.scrolledCnt = 0
 
     call self.__window.show(1)
 
@@ -1403,8 +1482,11 @@ function! s:ScrollbarWindow.close()
     call self.__window.close()
     let self.isOpen = 0
 endfunction
+function! s:ScrollbarWindow.updateByDelta(delta)
+    call self.update(self.scrolledCnt + a:delta)
+endfunction
 function! s:ScrollbarWindow.update(scrolledCnt)
-    if self.isOpen == 0
+    if self.isOpen == 0 || a:scrolledCnt < 0 || a:scrolledCnt > (self.total - self.winHeight)
         return
     endif
 
@@ -1419,6 +1501,7 @@ function! s:ScrollbarWindow.update(scrolledCnt)
     endfor
 
     call self.__window.syntax_end()
+    let self.scrolledCnt = a:scrolledCnt
     redraw
 endfunction
 function! s:ScrollbarWindow.dumpContent()
@@ -2045,6 +2128,18 @@ function! s:event2String(event)
         call remove(workingEvent, "new")
     endif
     return string(workingEvent)
+endfunction
+
+function! s:calcWrappedHeight(textList, width)
+    let wrappedHeight = 0
+    for text in a:textList
+        if empty(text)
+            let wrappedHeight += 1
+        else
+            let wrappedHeight += (1.0 * strwidth(text) / a:width)->ceil()->float2nr()
+        endif
+    endfor
+    return wrappedHeight
 endfunction
 
 " only used in testing
@@ -3712,9 +3807,9 @@ if 0
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
         let docWindow1 = s:VMenuManager.__focusedWindow
-        call assert_equal(["hello", "vmenu"], docWindow1.dumpContent().textList)
+        call assert_equal(["hello", "vmenu"], docWindow1.docPane.dumpContent().textList)
         call docWindow1.handleEvent(s:KeyStrokeEvent.new("j"))
-        call assert_equal(["hello", "vmenu2"], s:VMenuManager.__focusedWindow.dumpContent().textList)
+        call assert_equal(["hello", "vmenu2"], s:VMenuManager.__focusedWindow.docPane.dumpContent().textList)
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
         call assert_equal(0, s:VMenuManager.__focusedWindow.isOpen)
         call assert_equal(0, s:VMenuManager.__focusedWindow.parentVmenuWindow.isOpen)
@@ -3784,7 +3879,7 @@ if 0
                     \.build()
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
-        call assert_equal([0, 1, 2], s:VMenuManager.__focusedWindow.dumpContent().textList)
+        call assert_equal([0, 1, 2], s:VMenuManager.__focusedWindow.docPane.dumpContent().textList)
         call assert_equal(4, s:VMenuManager.__focusedWindow.winWidth)
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
     endif
@@ -3803,15 +3898,15 @@ if 0
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<C-E>"))
-        call assert_equal([1, 2, 3], s:VMenuManager.__focusedWindow.dumpContent().textList)
+        call assert_equal([1, 2, 3], s:VMenuManager.__focusedWindow.docPane.dumpContent().textList)
         " reach the bottom. keep as is
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<C-E>"))
-        call assert_equal([1, 2, 3], s:VMenuManager.__focusedWindow.dumpContent().textList)
+        call assert_equal([1, 2, 3], s:VMenuManager.__focusedWindow.docPane.dumpContent().textList)
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<C-Y>"))
-        call assert_equal([0, 1, 2], s:VMenuManager.__focusedWindow.dumpContent().textList)
+        call assert_equal([0, 1, 2], s:VMenuManager.__focusedWindow.docPane.dumpContent().textList)
         " reach the top. keep as is
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<C-Y>"))
-        call assert_equal([0, 1, 2], s:VMenuManager.__focusedWindow.dumpContent().textList)
+        call assert_equal([0, 1, 2], s:VMenuManager.__focusedWindow.docPane.dumpContent().textList)
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
     endif
 
@@ -3828,15 +3923,15 @@ if 0
                     \.build()
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
-        call assert_equal([0, 1, 2], s:VMenuManager.__focusedWindow.dumpContent().textList)
+        call assert_equal([0, 1, 2], s:VMenuManager.__focusedWindow.docPane.dumpContent().textList)
         call assert_equal([
                     \#{highlight: "VmenuDocWindowScrollbar", x1: 0, y1: 0, x2: 1, y2: 0},
                     \#{highlight: "VmenuDocWindowScrollbar", x1: 0, y1: 1, x2: 1, y2: 1}],
-                    \s:VMenuManager.__focusedWindow.scrollbarWindow.dumpContent().highlight)
+                    \s:VMenuManager.__focusedWindow.scrollbarPane.dumpContent().highlight)
         call assert_equal(s:VMenuManager.__focusedWindow.x+1,
-                    \s:VMenuManager.__focusedWindow.scrollbarWindow.x)
+                    \s:VMenuManager.__focusedWindow.scrollbarPane.x)
         call assert_equal(s:VMenuManager.__focusedWindow.y,
-                    \s:VMenuManager.__focusedWindow.scrollbarWindow.y)
+                    \s:VMenuManager.__focusedWindow.scrollbarPane.y)
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
     endif
 
@@ -4035,6 +4130,64 @@ if 0
                     \.showAtCursor()
         "call s:VMenuManager.startListening()
         call assert_equal(2, s:VMenuManager.__focusedWindow.winHeight)
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+    endif
+
+    " test both the scroll bar and text line wrapping are activated
+    if 1
+        call s:DocWindow.builder()
+                    \.textList(["123456", "ab", "cd"])
+                    \.maxHeight(2)
+                    \.enableEscToClose()
+                    \.maxWidth(3)
+                    \.build()
+                    \.showAtCursor()
+        "call s:VMenuManager.startListening()
+        call assert_equal(3, s:VMenuManager.__focusedWindow.winWidth)
+        call assert_equal(2, s:VMenuManager.__focusedWindow.winHeight)
+        call assert_equal(2, s:VMenuManager.__focusedWindow.docPane.winWidth)
+        call assert_equal(s:VMenuManager.__focusedWindow.x + 2, s:VMenuManager.__focusedWindow.scrollbarPane.x)
+        call assert_equal(s:VMenuManager.__focusedWindow.y, s:VMenuManager.__focusedWindow.scrollbarPane.y)
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<C-E>"))
+        call assert_equal(["ab", "cd"], s:VMenuManager.__focusedWindow.docPane.dumpContent().textList) " the first line is scrolled totally
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+    endif
+
+    " show the scrollbar when the text that the wrapped height exceeds the window height.
+    " when scrolling down, the text should be scrolled out totally even there is nothing left.
+    if 1
+        call s:DocWindow.builder()
+                    \.textList(["123456789"])
+                    \.maxHeight(2)
+                    \.enableEscToClose()
+                    \.maxWidth(3)
+                    \.build()
+                    \.showAtCursor()
+        "call s:VMenuManager.startListening()
+        call assert_equal(3, s:VMenuManager.__focusedWindow.winWidth)
+        call assert_equal(2, s:VMenuManager.__focusedWindow.winHeight)
+        call assert_equal(2, s:VMenuManager.__focusedWindow.docPane.winWidth)
+        call assert_equal(s:VMenuManager.__focusedWindow.x + 2, s:VMenuManager.__focusedWindow.scrollbarPane.x)
+        call assert_equal(s:VMenuManager.__focusedWindow.y, s:VMenuManager.__focusedWindow.scrollbarPane.y)
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<C-E>"))
+        call assert_equal([], s:VMenuManager.__focusedWindow.docPane.dumpContent().textList)
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
+    endif
+
+    " stop scrolling down when the docPane is blank
+    if 1
+        call s:DocWindow.builder()
+                    \.textList(["123456789"])
+                    \.maxHeight(2)
+                    \.enableEscToClose()
+                    \.maxWidth(3)
+                    \.build()
+                    \.showAtCursor()
+        "call s:VMenuManager.startListening()
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<C-E>"))
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<C-E>"))
+        call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<C-Y>"))
+        call assert_false([] == s:VMenuManager.__focusedWindow.docPane.dumpContent().textList)
         call s:VMenuManager.__focusedWindow.handleEvent(s:KeyStrokeEvent.new("\<ESC>"))
     endif
 
