@@ -208,9 +208,13 @@ the log can be appended to the inspector window by setting:
 Close the inspector window.
 
 
-3.13 vmenu#openDocWindow(textList)                       *vmenu#openDocWindow()*
+3.13 vmenu#openDocWindow(textList [, opts])              *vmenu#openDocWindow()*
 ----------------------------------------
 Open the doc window.
+param:
+    opts.max_width: (optional) max doc window width. valid value ranges from
+                    2 to 95% of the screen width. If it is omitted then 95%
+                    of the screen width will be used.
 pressing "ESC" to close.
 >
     :call vmenu#openDocWindow(["hello", "world"])

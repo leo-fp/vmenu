@@ -2067,10 +2067,19 @@ function! vmenu#closeInspector()
     call s:Inspector.close()
 endfunction
 
-function! vmenu#openDocWindow(textList)
-    call s:DocWindow.builder()
+" opts.max_width: (optional) max doc window width. from 2 to 95% of the screen width
+function! vmenu#openDocWindow(textList, opts={})
+    let docWindowBuilder = s:DocWindow.builder()
                 \.textList(a:textList)
                 \.enableEscToClose()
+
+    if has_key(a:opts, 'max_width')
+        let max_width = max([str2nr(a:opts.max_width), 2])
+        let max_width = min([max_width, float2nr(&columns*0.95)])
+        let docWindowBuilder = docWindowBuilder.maxWidth(max_width)
+    endif
+
+    call docWindowBuilder
                 \.build()
                 \.showAtCursor()
     call s:VMenuManager.startListening()
