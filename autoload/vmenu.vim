@@ -58,6 +58,7 @@ let s:logAppenderMap = #{
             \}
 let s:logAppender = get(s:logAppenderMap, s:log_appender_type)
 let s:leftBorderChar = "▌"
+let s:event_handle_delay = 0 " delay time (seconds) before handling event
 
 "-------------------------------------------------------------------------------
 " class HotKey
@@ -181,7 +182,6 @@ hi! VmenuDocWindow guifg=#BEC0C6 guibg=#565656
 let s:VmenuWindowBuilder = {}
 function! s:VmenuWindowBuilder.new()
     let vmenuWindowBuilder = deepcopy(s:VmenuWindowBuilder, 1)
-    let vmenuWindowBuilder.__delayTime           = 0    " delay time (seconds) before handling key stroke
     let vmenuWindowBuilder.__parentContextWindow = {}   " parent vmenu window
     let vmenuWindowBuilder.__goPreviousKey       = 'k'  " key to focus previous item
     let vmenuWindowBuilder.__goNextKey           = 'j'  " key to focus next item
@@ -195,10 +195,6 @@ function! s:VmenuWindowBuilder.new()
     let vmenuWindowBuilder.__editorStatusSupplier = function("s:getEditorStatus")
     let vmenuWindowBuilder.__winHeight = float2nr(&lines * 0.8)    " maxmium window height. only supported in context menu
     return vmenuWindowBuilder
-endfunction
-function! s:VmenuWindowBuilder.delay(seconds)
-    let self.__delayTime = a:seconds
-    return self
 endfunction
 function! s:VmenuWindowBuilder.parentVmenuWindow(parentVmenuWindow)
     let self.__parentContextWindow = a:parentVmenuWindow
@@ -442,7 +438,7 @@ endfunction
 let s:EventHandler = {}
 function! s:EventHandler.new()
     let eventHandler = deepcopy(s:EventHandler, 1)
-    let eventHandler.__delayTime = 0
+    let eventHandler.__delayTime = s:event_handle_delay
     let eventHandler.__actionMap = {}
     let eventHandler.winId = -1 " vmenu window id
     return eventHandler
@@ -524,7 +520,6 @@ function! s:ContextWindow.new(contextWindowBuilder)
     let contextWindow.__componentLength = contextWindow.contextItemList->len()
     let contextWindow.x = a:contextWindowBuilder.__x " column number
     let contextWindow.y = a:contextWindowBuilder.__y " line number
-    let contextWindow.__delayTime = a:contextWindowBuilder.__delayTime
     for i in range(len(contextWindow.contextItemList))
         if contextWindow.contextItemList[i].hotKey != ''
             call add(contextWindow.hotKeyList, s:HotKey.new(contextWindow.contextItemList[i].hotKey->tolower(), i))
@@ -744,7 +739,6 @@ function! s:ContextWindow.__expand()
     let subContextWindow = s:ContextWindow.builder()
                 \.contextItemList(subItemList)
                 \.parentVmenuWindow(self)
-                \.delay(self.__delayTime)
                 \.editorStatusSupplier(self.__editorStatusSupplier)
                 \.errConsumer(self.__errConsumer)
                 \.build()
@@ -1022,7 +1016,6 @@ function! s:TopMenuWindow.new(topMenuWindowBuilder)
 
     let topMenuWindow.__curItemIndex = 0
     let topMenuWindow.__padding = 2 " spaces added on the left and right side for every item
-    let topMenuWindow.__delayTime = a:topMenuWindowBuilder.__delayTime
     let topMenuWindow.__errConsumer = a:topMenuWindowBuilder.__errConsumer
     let topMenuWindow.isOpen = 0
     call s:log(printf("new TopMenuWindow created, winId: %s", topMenuWindow.winId))
