@@ -182,7 +182,7 @@ hi! VmenuDocWindow guifg=#BEC0C6 guibg=#565656
 let s:VmenuWindowBuilder = {}
 function! s:VmenuWindowBuilder.new()
     let vmenuWindowBuilder = deepcopy(s:VmenuWindowBuilder, 1)
-    let vmenuWindowBuilder.__parentContextWindow = {}   " parent vmenu window
+    let vmenuWindowBuilder.__parentContextWindow = s:EventHandler.new()   " parent vmenu window
     let vmenuWindowBuilder.__goPreviousKey       = 'k'  " key to focus previous item
     let vmenuWindowBuilder.__goNextKey           = 'j'  " key to focus next item
     let vmenuWindowBuilder.__closeKey            = "\<ESC>" "key to close vmenu window
@@ -257,7 +257,7 @@ function! s:VmenuWindow.new()
     let vmenuWindow.__errConsumer = function("s:printWarn")
     let vmenuWindow.__curItemIndex = -1
     let vmenuWindow.__componentLength = 0
-    let vmenuWindow.parentVmenuWindow = {}  " parent vmenu window instance
+    let vmenuWindow.parentVmenuWindow = s:EventHandler.new()  " parent vmenu window instance
     let vmenuWindow.subVmenuWindow = s:EventHandler.new()     " sub vmenu window instance"
     let vmenuWindow.docWindow = s:EventHandler.new()          " doc window instance.
     let vmenuWindow.scrollbarWindow = s:EventHandler.new()
@@ -340,12 +340,10 @@ function! s:VmenuWindow.close(closeCode, event={})
     let self.isOpen = 0
     call self.docWindow.handleEvent(#{key: "VMENU_CLOSE_DOC_WINDOW"})
     call s:log("winid: " .. self.winId .. " closed")
-    if has_key(self, 'parentVmenuWindow') && !empty(self.parentVmenuWindow)
-        call self.parentVmenuWindow.handleEvent(s:SubMenuClosedEvent.new(a:closeCode, a:event))
-    endif
+    call self.parentVmenuWindow.handleEvent(s:SubMenuClosedEvent.new(a:closeCode, a:event))
 
     " root window, stop getting user input
-    if !has_key(self, 'parentVmenuWindow') || empty(self.parentVmenuWindow)
+    if !has_key(self.parentVmenuWindow, 'parentVmenuWindow')
         call s:VMenuManager.stopListen()
         " make sure no vmenu item tips left
         echo vmenu#itemTips()
@@ -385,9 +383,7 @@ function! s:VmenuWindow.__onMouseHover(event)
             call self.__renderHighlight(-1)
         endif
 
-        if !empty(self.parentVmenuWindow)
-            call self.parentVmenuWindow.handleEvent(a:event)
-        endif
+        call self.parentVmenuWindow.handleEvent(a:event)
 
         if self.winId == s:VMenuManager.__focusedWindow.winId
             let self.__curItemIndex = itemIdxAtMousePos
@@ -464,7 +460,7 @@ function! s:ContextWindowBuilder.new()
     let contextWindowBuilder = s:VmenuWindowBuilder.new()
     call extend(contextWindowBuilder, deepcopy(s:ContextWindowBuilder, 1), "force")
     let contextWindowBuilder.__contextItemList = []
-    let contextWindowBuilder.__parentContextWindow = {}
+    let contextWindowBuilder.__parentContextWindow = s:EventHandler.new()
     let contextWindowBuilder.__goPreviousKey = 'k'
     let contextWindowBuilder.__goNextKey = 'j'
     let contextWindowBuilder.__closeKey = "\<ESC>"
@@ -2271,10 +2267,6 @@ if 0
 
     " fill name to same length test
     if 1
-        call s:VMenuManager.parseContextItem([
-                    \["1", ""],
-                    \["12", ""]
-                    \])
         call s:ContextWindow.builder()
                     \.contextItemList(s:VMenuManager.parseContextItem([
                     \["1", ""],
