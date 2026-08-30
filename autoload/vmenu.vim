@@ -43,6 +43,7 @@ let s:enable_markdown_syntax_in_doc_window = get(g:, "vmenu_enable_markdown_synt
 let s:enable_left_border = get(g:, "vmenu_enable_left_border", 0)
 let s:display_group_name = get(g:, "vmenu_display_group_name", 0)
 let s:log_appender_type = get(g:, "vmenu_log_appender_type", 0)
+let s:colorscheme = get(g:, "vmenu_colorscheme", "dark") " dark / light
 
 let s:logMsg = []
 function! s:writeToLogMsg(msg)
@@ -161,20 +162,38 @@ endfunction
 "-------------------------------------------------------------------------------
 " color
 "-------------------------------------------------------------------------------
-hi! VmenuBg guifg=#BEC0C6 guibg=#2B2D30
-hi! VmenuSelect guibg=#2E436E guifg=#BCBCAC
-hi! VmenuDesc guifg=#465967
-hi! VmenuSepLine guifg=#393B3F
-hi! VmenuGroupName guifg=#5d5e60
-hi! VmenuLeftBorder guifg=#323232
-hi! VmenuLeftBorderSelect guibg=#2E436E guifg=#323232
-hi! VmenuInactive guifg=#4D5360
-hi! VmenuHotkey1 gui=underline guifg=#BEC0C6
-hi! VmenuSelectedHotkey gui=underline guibg=#2E436E guifg=#BEC0C6
-hi! VmenuInactiveHotKey gui=underline guifg=#4D5360
-hi! VmenuScrollbar guibg=#4D4D4F guifg=#4D4D4F
-hi! VmenuDocWindowScrollbar guibg=#67676A guifg=#67676A " thumb highlight
-hi! VmenuDocWindow guifg=#BEC0C6 guibg=#565656
+if s:colorscheme == 'light'
+    hi! VmenuBg guifg=#000000 guibg=#cccccc
+    hi! VmenuSelect guibg=#000000 guifg=#cccccc
+    hi! VmenuDesc guifg=#465967
+    hi! VmenuSepLine guifg=#bfbfbf
+    hi! VmenuGroupName guifg=#9d9d9d
+    hi! VmenuLeftBorder guifg=#c2c2c2
+    hi! VmenuLeftBorderSelect guibg=#000000 guifg=#c2c2c2
+    hi! VmenuInactive guifg=#b3afaf
+    hi! VmenuHotkey1 gui=underline guifg=#000000
+    hi! VmenuSelectedHotkey gui=underline guibg=#000000 guifg=#cccccc
+    hi! VmenuInactiveHotKey gui=underline guifg=#b3afaf
+    hi! VmenuScrollbar guibg=#4D4D4F guifg=#4D4D4F
+    hi! VmenuDocWindowScrollbar guibg=#dddddd guifg=#dddddd " thumb highlight
+    hi! VmenuDocWindow guifg=#5e5e5e guibg=#f2f2f2
+else
+    hi! VmenuBg guifg=#BEC0C6 guibg=#2B2D30
+    hi! VmenuSelect guibg=#2E436E guifg=#BCBCAC
+    hi! VmenuDesc guifg=#465967
+    hi! VmenuSepLine guifg=#393B3F
+    hi! VmenuGroupName guifg=#5d5e60
+    hi! VmenuLeftBorder guifg=#323232
+    hi! VmenuLeftBorderSelect guibg=#2E436E guifg=#323232
+    hi! VmenuInactive guifg=#4D5360
+    hi! VmenuHotkey1 gui=underline guifg=#BEC0C6
+    hi! VmenuSelectedHotkey gui=underline guibg=#2E436E guifg=#BEC0C6
+    hi! VmenuInactiveHotKey gui=underline guifg=#4D5360
+    hi! VmenuScrollbar guibg=#4D4D4F guifg=#4D4D4F
+    hi! VmenuDocWindowScrollbar guibg=#67676A guifg=#67676A " thumb highlight
+    hi! VmenuDocWindow guifg=#BEC0C6 guibg=#565656
+endif
+
 
 "-------------------------------------------------------------------------------
 " class VmenuWindowBuilder

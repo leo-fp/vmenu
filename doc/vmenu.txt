@@ -46,6 +46,7 @@ Version:	0.3.0
     6.8 g:vmenu_enable_left_border...................|vmenu_enable_left_border|
     6.9 g:vmenu_display_group_name...................|vmenu_display_group_name|
     6.10 g:vmenu_log_appender_type....................|vmenu_log_appender_type|
+    6.11 g:vmenu_colorscheme................................|vmenu_colorscheme|
 7. vmenu Changelog............................................|vmenu-changelog|
 
 ==============================================================================
@@ -501,6 +502,16 @@ how to set the group name in the user defined separator line?
 Set the destination where the logs should be appended.
     0: (default) message-history. can be viewed by ":message".
     1: inspector window. can be viewed by ":call vmenu#openInspector()".
+
+
+6.11 vmenu_colorscheme                                       *vmenu_colorscheme*
+----------------------------------------
+Set the colorscheme of vmenu.
+    colorschemes:
+    "dark": default
+    "light"
+>
+    let g:vmenu_colorscheme = "light"
 
 
 ==============================================================================
