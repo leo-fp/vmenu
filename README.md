@@ -241,6 +241,8 @@ call vmenu#openContextWindow(content, {})
 * if you want a more flexible way to control vmenu item show status or deactive status, you can
 define a function to `show-if` or `deactive-if` field. for more details, check `:h vmenu`
 
+* you can use this plugin with macros.
+
 ## similar plugins
 [vim-quickui](https://github.com/skywind3000/vim-quickui)
 
